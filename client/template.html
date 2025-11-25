@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <title>Gestionnaire de Stock Scolaire</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* SIDEBAR */
+
+        .sidebar {
+            width: 220px;
+            background: #0b1120;
+            color: #f9fafb;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+        }
+
+        .sidebar-header {
+            margin-bottom: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .sidebar-subtitle {
+            font-size: .75rem;
+            color: #9ca3af;
+        }
+
+        .nav-section-title {
+            font-size: .75rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            margin: 12px 0 6px;
+        }
+
+        .nav-list {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 4px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 10px;
+            border-radius: 999px;
+            font-size: .9rem;
+            color: #e5e7eb;
+            cursor: pointer;
+        }
+
+        .nav-link span.icon {
+            width: 18px;
+            text-align: center;
+        }
+
+        .nav-link:hover {
+            background: #111827;
+        }
+
+        .nav-link.active {
+            background: #2563eb;
+            color: #eff6ff;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid #1f2937;
+            font-size: .75rem;
+            color: #6b7280;
+        }
+
+        /* MAIN */
+
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            padding: 16px 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        @media (max-width: 900px) {
+            .sidebar {
+                display: none;
+            }
+            .main {
+                margin-left: 0;
+            }
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .topbar-left h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .topbar-left p {
+            font-size: .85rem;
+            color: #6b7280;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: .85rem;
+        }
+
+        .pill {
+            background: #e5e7eb;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: .8rem;
+            color: #4b5563;
+        }
+
+        .user-chip {
+            text-align: right;
+        }
+
+        .user-name {
+            font-size: .9rem;
+            font-weight: 500;
+        }
+
+        .user-role {
+            font-size: .75rem;
+            color: #6b7280;
+        }
+
+        /* CONTENT / SECTIONS */
+
+        .content-area {
+            flex: 1;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .section {
+            display: none;
+            margin-top: 16px;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .section.active {
+            display: flex;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .section-subtitle {
+            font-size: .85rem;
+            color: #6b7280;
+        }
+
+        /* CARDS / LAYOUT */
+
+        .card {
+            background: #ffffff;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+            padding: 14px 16px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 10px;
+            gap: 8px;
+        }
+
+        .card-title {
+            font-size: .95rem;
+            font-weight: 600;
+        }
+
+        .card-subtitle {
+            font-size: .8rem;
+            color: #6b7280;
+        }
+
+        .grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .grid-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        @media (max-width: 1024px) {
+            .grid-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .grid-4 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .kpi-value {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .kpi-label {
+            font-size: .8rem;
+            color: #6b7280;
+        }
+
+        /* TABLES */
+
+        .table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .85rem;
+        }
+
+        thead {
+            background: #e5e7eb;
+        }
+
+        th,
+        td {
+            padding: 8px 6px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            white-space: nowrap;
+        }
+
+        th {
+            font-weight: 500;
+            color: #6b7280;
+            font-size: .8rem;
+        }
+
+        tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .badge {
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: .75rem;
+            display: inline-block;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-link {
+            border: none;
+            background: none;
+            color: #2563eb;
+            font-size: .8rem;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .btn-link.danger {
+            color: #ef4444;
+        }
+
+        /* FORMULAIRES */
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px 16px;
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        label {
+            font-size: .8rem;
+            color: #6b7280;
+        }
+
+        input,
+        select,
+        textarea {
+            font-family: inherit;
+            font-size: .85rem;
+            padding: 7px 8px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+            outline: none;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #2563eb;
+            background: #ffffff;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            font-family: inherit;
+            font-size: .85rem;
+            border-radius: 999px;
+            padding: 7px 14px;
+            border: 1px solid #d1d5db;
+            cursor: pointer;
+            background: #e5e7eb;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #ffffff;
+        }
+
+        .btn-primary:hover {
+            filter: brightness(0.95);
+        }
+
+        .btn-ghost {
+            background: transparent;
+        }
+
+        /* LOGIN */
+
+        .login-card {
+            max-width: 360px;
+        }
+
+        .login-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .login-subtitle {
+            font-size: .8rem;
+            color: #6b7280;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">Stock Scolaire</div>
+            <div class="sidebar-subtitle">Dashboard multi-établissements</div>
+        </div>
+
+        <div>
+            <div class="nav-section-title">Général</div>
+            <ul class="nav-list">
+                <li class="nav-item">
+                    <a href="#dashboard" class="nav-link active">
+                        <span class="icon">🏠</span>
+                        <span>Tableau de bord</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#stock" class="nav-link">
+                        <span class="icon">📦</span>
+                        <span>Stock</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#new-item" class="nav-link">
+                        <span class="icon">➕</span>
+                        <span>Nouvel article</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#movements" class="nav-link">
+                        <span class="icon">🔁</span>
+                        <span>Mouvements</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#users" class="nav-link">
+                        <span class="icon">👤</span>
+                        <span>Utilisateurs</span>
+                    </a>
+                </li>
+            </ul>
+
+            <div class="nav-section-title">Accès</div>
+            <ul class="nav-list">
+                <li class="nav-item">
+                    <a href="#login" class="nav-link">
+                        <span class="icon">🔐</span>
+                        <span>Connexion</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="sidebar-footer">
+            <div>Lycée Demo — Paris</div>
+            <div>Version MVP • 0.1</div>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+        <!-- TOPBAR -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1>Gestionnaire de stock</h1>
+                <p>Vue d’ensemble du matériel de l’établissement</p>
+            </div>
+            <div class="topbar-right">
+                <div class="pill">Établissement : Lycée Demo</div>
+                <div class="user-chip">
+                    <div class="user-name">Omar (Super-admin)</div>
+                    <div class="user-role">Connecté</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTENU -->
+        <div class="content-area">
+            <!-- DASHBOARD -->
+            <section id="dashboard" class="section active">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Tableau de bord</h2>
+                        <p class="section-subtitle">Indicateurs clés du stock</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Articles en stock</div>
+                        </div>
+                        <div class="kpi-value">1 247</div>
+                        <div class="kpi-label">Tous états confondus</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Alertes stock faible</div>
+                        </div>
+                        <div class="kpi-value" style="color:#ef4444;">12</div>
+                        <div class="kpi-label">Articles à vérifier</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Mouvements aujourd’hui</div>
+                        </div>
+                        <div class="kpi-value" style="color:#16a34a;">28</div>
+                        <div class="kpi-label">Entrées + sorties</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Catégories</div>
+                        </div>
+                        <div class="kpi-value">15</div>
+                        <div class="kpi-label">Types de matériel</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-2" style="margin-top:12px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Derniers mouvements</div>
+                                <div class="card-subtitle">Aperçu des 5 derniers</div>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th>Article</th>
+                                    <th>Type</th>
+                                    <th>Qté</th>
+                                    <th>Utilisateur</th>
+                                    <th>Date</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td>PC portable HP</td>
+                                    <td><span class="badge badge-success">Entrée</span></td>
+                                    <td>5</td>
+                                    <td>Agent 1</td>
+                                    <td>20/11 - 09:12</td>
+                                </tr>
+                                <tr>
+                                    <td>Vidéoprojecteur</td>
+                                    <td><span class="badge badge-danger">Sortie</span></td>
+                                    <td>1</td>
+                                    <td>Prof. Dupont</td>
+                                    <td>20/11 - 08:40</td>
+                                </tr>
+                                <tr>
+                                    <td>Câble HDMI</td>
+                                    <td><span class="badge badge-danger">Sortie</span></td>
+                                    <td>3</td>
+                                    <td>Agent 2</td>
+                                    <td>19/11 - 17:03</td>
+                                </tr>
+                                <tr>
+                                    <td>Tablette Samsung</td>
+                                    <td><span class="badge badge-success">Entrée</span></td>
+                                    <td>10</td>
+                                    <td>Admin</td>
+                                    <td>19/11 - 15:26</td>
+                                </tr>
+                                <tr>
+                                    <td>Clé USB 32 Go</td>
+                                    <td><span class="badge badge-danger">Sortie</span></td>
+                                    <td>6</td>
+                                    <td>Prof. Martin</td>
+                                    <td>19/11 - 11:02</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Alertes stock faible</div>
+                                <div class="card-subtitle">Articles sous le seuil</div>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th>Article</th>
+                                    <th>Qté</th>
+                                    <th>Seuil</th>
+                                    <th>Localisation</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td>Craies blanches</td>
+                                    <td><span class="badge badge-danger">8</span></td>
+                                    <td>20</td>
+                                    <td>Réserve B1</td>
+                                </tr>
+                                <tr>
+                                    <td>Feutres Velleda</td>
+                                    <td><span class="badge badge-danger">5</span></td>
+                                    <td>15</td>
+                                    <td>Salle des profs</td>
+                                </tr>
+                                <tr>
+                                    <td>Câbles RJ45</td>
+                                    <td><span class="badge badge-warning">12</span></td>
+                                    <td>10</td>
+                                    <td>Local réseau</td>
+                                </tr>
+                                <tr>
+                                    <td>Piles AA</td>
+                                    <td><span class="badge badge-danger">4</span></td>
+                                    <td>20</td>
+                                    <td>Intendance</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STOCK -->
+            <section id="stock" class="section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Stock</h2>
+                        <p class="section-subtitle">Liste des articles de l’établissement</p>
+                    </div>
+                    <div>
+                        <button class="btn btn-ghost">Filtrer</button>
+                        <button class="btn btn-primary">Nouvel article</button>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top:12px;">
+                    <div class="card-header">
+                        <div class="card-title">Articles</div>
+                        <div class="card-subtitle">Vue simplifiée du stock</div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                            <tr>
+                                <th>Nom</th>
+                                <th>Catégorie</th>
+                                <th>Qté</th>
+                                <th>État</th>
+                                <th>Localisation</th>
+                                <th>Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td>PC portable HP 14"</td>
+                                <td>Informatique</td>
+                                <td>32</td>
+                                <td><span class="badge badge-success">Bon</span></td>
+                                <td>Salle info 1</td>
+                                <td>
+                                    <div class="table-actions">
+                                        <button class="btn-link">Modifier</button>
+                                        <button class="btn-link danger">Supprimer</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Vidéoprojecteur Epson</td>
+                                <td>Audio/vidéo</td>
+                                <td>5</td>
+                                <td><span class="badge badge-success">Bon</span></td>
+                                <td>Réserve A3</td>
+                                <td>
+                                    <div class="table-actions">
+                                        <button class="btn-link">Modifier</button>
+                                        <button class="btn-link danger">Supprimer</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Clavier USB</td>
+                                <td>Informatique</td>
+                                <td>9</td>
+                                <td><span class="badge badge-warning">À vérifier</span></td>
+                                <td>Local technique</td>
+                                <td>
+                                    <div class="table-actions">
+                                        <button class="btn-link">Modifier</button>
+                                        <button class="btn-link danger">Supprimer</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Tableau blanc 120x90</td>
+                                <td>Mobilier</td>
+                                <td>3</td>
+                                <td><span class="badge badge-success">Neuf</span></td>
+                                <td>Réserve B2</td>
+                                <td>
+                                    <div class="table-actions">
+                                        <button class="btn-link">Modifier</button>
+                                        <button class="btn-link danger">Supprimer</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Craies blanches</td>
+                                <td>Consommables</td>
+                                <td>8</td>
+                                <td><span class="badge badge-danger">Critique</span></td>
+                                <td>Intendance</td>
+                                <td>
+                                    <div class="table-actions">
+                                        <button class="btn-link">Modifier</button>
+                                        <button class="btn-link danger">Supprimer</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- NOUVEL ARTICLE -->
+            <section id="new-item" class="section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Nouvel article</h2>
+                        <p class="section-subtitle">Ajouter un article au stock</p>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top:12px;">
+                    <form>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="item-name">Nom de l’article</label>
+                                <input id="item-name" placeholder="Ex : PC portable HP 14&quot;" />
+                            </div>
+                            <div class="form-group">
+                                <label for="item-category">Catégorie</label>
+                                <select id="item-category">
+                                    <option>Informatique</option>
+                                    <option>Audio / vidéo</option>
+                                    <option>Mobilier</option>
+                                    <option>Consommables</option>
+                                    <option>Autre</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="item-qty">Quantité initiale</label>
+                                <input id="item-qty" type="number" min="0" value="0" />
+                            </div>
+                            <div class="form-group">
+                                <label for="item-location">Localisation</label>
+                                <input id="item-location" placeholder="Ex : Réserve A3" />
+                            </div>
+                            <div class="form-group">
+                                <label for="item-serial">Numéro de série (optionnel)</label>
+                                <input id="item-serial" placeholder="Ex : HP-2025-ABCD" />
+                            </div>
+                            <div class="form-group">
+                                <label for="item-state">État</label>
+                                <select id="item-state">
+                                    <option>Neuf</option>
+                                    <option>Bon</option>
+                                    <option>À vérifier</option>
+                                    <option>Hors service</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label for="item-desc">Description</label>
+                            <textarea id="item-desc" placeholder="Informations complémentaires sur l’article..."></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-ghost">Annuler</button>
+                            <button type="submit" class="btn btn-primary">Enregistrer l’article</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- MOUVEMENTS -->
+            <section id="movements" class="section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Mouvements</h2>
+                        <p class="section-subtitle">Entrées et sorties de stock</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-2" style="margin-top:12px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Enregistrer un mouvement</div>
+                        </div>
+                        <form>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="mov-item">Article</label>
+                                    <select id="mov-item">
+                                        <option>PC portable HP 14"</option>
+                                        <option>Vidéoprojecteur Epson</option>
+                                        <option>Craies blanches</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mov-type">Type</label>
+                                    <select id="mov-type">
+                                        <option>Entrée</option>
+                                        <option>Sortie</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mov-qty">Quantité</label>
+                                    <input id="mov-qty" type="number" min="1" value="1" />
+                                </div>
+                                <div class="form-group">
+                                    <label for="mov-date">Date</label>
+                                    <input id="mov-date" type="date" />
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-top: 10px;">
+                                <label for="mov-notes">Commentaire (optionnel)</label>
+                                <textarea id="mov-notes" placeholder="Raison du mouvement, classe concernée, etc."></textarea>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Valider le mouvement</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Historique récent</div>
+                                <div class="card-subtitle">Derniers mouvements d’articles</div>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th>Article</th>
+                                    <th>Type</th>
+                                    <th>Qté</th>
+                                    <th>Utilisateur</th>
+                                    <th>Date</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td>PC portable HP</td>
+                                    <td><span class="badge badge-success">Entrée</span></td>
+                                    <td>3</td>
+                                    <td>Admin</td>
+                                    <td>20/11 - 10:05</td>
+                                </tr>
+                                <tr>
+                                    <td>Craies blanches</td>
+                                    <td><span class="badge badge-danger">Sortie</span></td>
+                                    <td>2</td>
+                                    <td>Agent 1</td>
+                                    <td>20/11 - 09:34</td>
+                                </tr>
+                                <tr>
+                                    <td>Vidéoprojecteur</td>
+                                    <td><span class="badge badge-danger">Sortie</span></td>
+                                    <td>1</td>
+                                    <td>Prof. Martin</td>
+                                    <td>19/11 - 16:12</td>
+                                </tr>
+                                <tr>
+                                    <td>Tablette Samsung</td>
+                                    <td><span class="badge badge-success">Entrée</span></td>
+                                    <td>10</td>
+                                    <td>Admin</td>
+                                    <td>19/11 - 14:27</td>
+                                </tr>
+                                <tr>
+                                    <td>Piles AA</td>
+                                    <td><span class="badge badge-danger">Sortie</span></td>
+                                    <td>6</td>
+                                    <td>Agent 2</td>
+                                    <td>18/11 - 11:51</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- UTILISATEURS -->
+            <section id="users" class="section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Utilisateurs</h2>
+                        <p class="section-subtitle">Gestion des rôles de l’établissement</p>
+                    </div>
+                    <div>
+                        <button class="btn btn-primary">Nouvel utilisateur</button>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top:12px;">
+                    <div class="card-header">
+                        <div class="card-title">Liste des utilisateurs</div>
+                        <div class="card-subtitle">Admins, agents, lecteurs…</div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                            <tr>
+                                <th>Nom</th>
+                                <th>Email</th>
+                                <th>Rôle</th>
+                                <th>État</th>
+                                <th>Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td>Omar</td>
+                                <td>omar@demo.fr</td>
+                                <td>Super-admin</td>
+                                <td><span class="badge badge-success">Actif</span></td>
+                                <td class="table-actions">
+                                    <button class="btn-link">Modifier</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Responsable stock</td>
+                                <td>stock.lycee@demo.fr</td>
+                                <td>Admin établissement</td>
+                                <td><span class="badge badge-success">Actif</span></td>
+                                <td class="table-actions">
+                                    <button class="btn-link">Modifier</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Agent 1</td>
+                                <td>agent1@demo.fr</td>
+                                <td>Agent</td>
+                                <td><span class="badge badge-success">Actif</span></td>
+                                <td class="table-actions">
+                                    <button class="btn-link">Modifier</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Prof. Martin</td>
+                                <td>martin@demo.fr</td>
+                                <td>Lecteur</td>
+                                <td><span class="badge badge-warning">Invité</span></td>
+                                <td class="table-actions">
+                                    <button class="btn-link">Modifier</button>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- LOGIN -->
+            <section id="login" class="section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Connexion</h2>
+                        <p class="section-subtitle">Accès au gestionnaire de stock</p>
+                    </div>
+                </div>
+
+                <div class="card login-card" style="margin-top:12px;">
+                    <div class="login-title">Connexion</div>
+                    <div class="login-subtitle">Réservé aux utilisateurs autorisés de l’établissement</div>
+                    <form>
+                        <div class="form-group">
+                            <label for="login-email">Email</label>
+                            <input id="login-email" type="email" placeholder="vous@etablissement.fr" />
+                        </div>
+                        <div class="form-group" style="margin-top: 8px;">
+                            <label for="login-password">Mot de passe</label>
+                            <input id="login-password" type="password" placeholder="••••••••" />
+                        </div>
+                        <div class="form-actions" style="margin-top: 14px; justify-content: flex-start;">
+                            <button type="submit" class="btn btn-primary">Se connecter</button>
+                            <button type="button" class="btn btn-ghost">Mot de passe oublié</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const links = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('.section');
+
+        function showSection(id) {
+            sections.forEach(s => {
+                s.classList.toggle('active', s.id === id);
+            });
+
+            links.forEach(l => {
+                const href = l.getAttribute('href') || '';
+                const target = href.startsWith('#') ? href.slice(1) : href;
+                l.classList.toggle('active', target === id);
+            });
+
+            location.hash = '#' + id;
+        }
+
+        links.forEach(link => {
+            link.addEventListener('click', e => {
+                const href = link.getAttribute('href') || '';
+                if (href.startsWith('#')) {
+                    e.preventDefault();
+                    showSection(href.slice(1));
+                }
+            });
+        });
+
+        const initial = location.hash ? location.hash.slice(1) : 'dashboard';
+        const exists = Array.from(sections).some(s => s.id === initial);
+        showSection(exists ? initial : 'dashboard');
+    });
+</script>
+</body>
+</html>
