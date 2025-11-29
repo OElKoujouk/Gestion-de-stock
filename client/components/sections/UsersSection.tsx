@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
 import { CreateUserForm } from "@/components/super-admin/CreateUserForm";
 import { EditUserDialog } from "@/components/super-admin/EditUserDialog";
 import { useAuth } from "@/context/auth-context";
@@ -26,6 +27,7 @@ export function UsersSection() {
   } | null>(null);
   const [currentUser, setCurrentUser] = useState<{ id: string; nom: string; role: string; etablissementId: string | null } | null>(null);
   const [establishmentNames, setEstablishmentNames] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
 
   const canManageUsers = role === "superAdmin" || role === "admin";
   const columnCount = canManageUsers ? 5 : 4;
@@ -69,6 +71,18 @@ export function UsersSection() {
     void fetchUsers();
   };
 
+  const filteredUsers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const list = users.filter((user) => user.id !== currentUser?.id);
+    if (!query) return list;
+    return list.filter(
+      (user) =>
+        user.nom.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        user.role.toLowerCase().includes(query),
+    );
+  }, [users, currentUser, search]);
+
   const handleOpenEdit = (user: (typeof users)[number]) => {
     setEditingUser(user);
     setEditDialogOpen(true);
@@ -82,7 +96,7 @@ export function UsersSection() {
   };
 
   const handleDelete = async (user: (typeof users)[number]) => {
-    if (!window.confirm(`Supprimer l'utilisateur ${user.nom} ?`)) {
+    if (!window.confirm(`Supprimer l’utilisateur ${user.nom} ?`)) {
       return;
     }
     setDeletingUserId(user.id);
@@ -90,7 +104,7 @@ export function UsersSection() {
       await api.deleteUser(user.id);
       await fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de supprimer l'utilisateur");
+      setError(err instanceof Error ? err.message : "Impossible de supprimer l’utilisateur");
     } finally {
       setDeletingUserId(null);
     }
@@ -98,27 +112,22 @@ export function UsersSection() {
 
   return (
     <div className="space-y-6">
-      {currentUser ? (
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Vous</p>
-              <p className="text-lg font-semibold text-slate-900">{currentUser.nom}</p>
-              <p className="text-xs text-slate-500">
-                Rôle&nbsp;: {currentUser.role} · Établissement&nbsp;: {currentUser.etablissementId ? establishmentNames[currentUser.etablissementId] ?? currentUser.etablissementId : "Global"}
-              </p>
-            </div>
-            <Badge variant="info">Connecté</Badge>
-          </div>
-        </div>
-      ) : null}
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.45em] text-slate-500">Gestion des utilisateurs</p>
-        <h2 className="mt-2 text-3xl font-semibold text-slate-900">Rôles & affectations</h2>
-        <p className="mt-1 max-w-3xl text-slate-500">
-          Les administrateurs créent des comptes, définissent les rôles, assignent les établissements et activent ou désactivent les accès.
-        </p>
-      </div>
+
+      <SectionHeader
+        eyebrow="Gestion des utilisateurs"
+        title="Rôles & affectations"
+        description="Les administrateurs créent des comptes, définissent les rôles, assignent les établissements et activent ou désactivent les accès."
+        actions={
+          canManageUsers ? (
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-slate-900/10 hover:bg-slate-800"
+            >
+              Créer un utilisateur
+            </button>
+          ) : null
+        }
+      />
 
       <Card>
         <CardHeader
@@ -126,11 +135,14 @@ export function UsersSection() {
           subtitle="Vue rapide des profils"
           action={
             canManageUsers ? (
-              <div className="flex gap-3">
-                <button className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Filtrer par rôle</button>
-                <button onClick={() => setDialogOpen(true)} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                  Créer un utilisateur
-                </button>
+              <div className="flex flex-wrap gap-3">
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Rechercher par nom, email ou rôle"
+                  className="w-64 rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                />
               </div>
             ) : undefined
           }
@@ -159,47 +171,45 @@ export function UsersSection() {
                     {error}
                   </td>
                 </tr>
-              ) : users.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={columnCount} className="py-4 text-center text-sm text-slate-500">
-                    Aucun utilisateur.
+                    Aucun utilisateur trouvé.
                   </td>
                 </tr>
               ) : (
-                users
-                  .filter((user) => user.id !== currentUser?.id)
-                  .map((user) => (
-                    <tr key={user.id}>
-                      <td className="py-4 pr-6 font-semibold text-slate-900">{user.nom}</td>
-                      <td className="py-4 pr-6 capitalize">{user.role}</td>
-                      <td className="py-4 pr-6">{user.etablissementId ? establishmentNames[user.etablissementId] ?? user.etablissementId : "Global"}</td>
-                      <td className="py-4 pr-6">
-                        <Badge variant={user.actif ? "success" : "warning"}>{user.actif ? "Actif" : "Désactivé"}</Badge>
+                filteredUsers.map((user) => (
+                  <tr key={user.id}>
+                    <td className="py-4 pr-6 font-semibold text-slate-900">{user.nom}</td>
+                    <td className="py-4 pr-6 capitalize">{user.role}</td>
+                    <td className="py-4 pr-6">{user.etablissementId ? establishmentNames[user.etablissementId] ?? user.etablissementId : "Global"}</td>
+                    <td className="py-4 pr-6">
+                      <Badge variant={user.actif ? "success" : "warning"}>{user.actif ? "Actif" : "Désactivé"}</Badge>
+                    </td>
+                    {canManageUsers ? (
+                      <td className="py-4">
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(user)}
+                            className="text-sm font-semibold text-slate-900 underline disabled:opacity-50"
+                            disabled={role === "admin" && user.role === "admin"}
+                          >
+                            Modifier
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(user)}
+                            className="text-sm font-semibold text-rose-600 underline disabled:opacity-50"
+                            disabled={deletingUserId === user.id || (role === "admin" && user.role === "admin")}
+                          >
+                            {deletingUserId === user.id ? "Suppression..." : "Supprimer"}
+                          </button>
+                        </div>
                       </td>
-                      {canManageUsers ? (
-                        <td className="py-4">
-                          <div className="flex gap-3">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(user)}
-                              className="text-sm font-semibold text-slate-900 underline disabled:opacity-50"
-                              disabled={role === "admin" && user.role === "admin"}
-                            >
-                              Modifier
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(user)}
-                              className="text-sm font-semibold text-rose-600 underline disabled:opacity-50"
-                              disabled={deletingUserId === user.id || (role === "admin" && user.role === "admin")}
-                            >
-                              {deletingUserId === user.id ? "Suppression..." : "Supprimer"}
-                            </button>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))
+                    ) : null}
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

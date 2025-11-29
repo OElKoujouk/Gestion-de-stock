@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
 import { CreateEstablishmentForm } from "@/components/super-admin/CreateEstablishmentForm";
 import { CreateUserForm } from "@/components/super-admin/CreateUserForm";
 import { EditEstablishmentDialog } from "@/components/super-admin/EditEstablishmentDialog";
@@ -54,23 +55,21 @@ export function AdminEstablishmentSection() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const fetchEstablishments = async () => {
+  const fetchEstablishments = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.getEstablishments();
       setEstablishments(data);
       setError(null);
-      if (!selectedEtablissementId && data.length > 0) {
-        setSelectedEtablissementId(data[0].id);
-      }
+      setSelectedEtablissementId((prev) => (prev ?? data[0]?.id ?? null));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger les etablissements");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
       const data = await api.getUsers();
@@ -81,9 +80,9 @@ export function AdminEstablishmentSection() {
     } finally {
       setUsersLoading(false);
     }
-  };
+  }, []);
 
-  const fetchArticles = async (establishmentId: string | null) => {
+  const fetchArticles = useCallback(async (establishmentId: string | null) => {
     if (!establishmentId) {
       setArticles([]);
       return;
@@ -98,9 +97,9 @@ export function AdminEstablishmentSection() {
     } finally {
       setArticlesLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCategories = async (establishmentId: string | null) => {
+  const fetchCategories = useCallback(async (establishmentId: string | null) => {
     if (!establishmentId) {
       setCategories([]);
       return;
@@ -111,11 +110,11 @@ export function AdminEstablishmentSection() {
       setCategories(data);
       setCategoriesError(null);
     } catch (err) {
-      setCategoriesError(err instanceof Error ? err.message : "Impossible de charger les catégories");
+      setCategoriesError(err instanceof Error ? err.message : "Impossible de charger les categories");
     } finally {
       setCategoriesLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void fetchEstablishments();
@@ -124,7 +123,7 @@ export function AdminEstablishmentSection() {
       .me()
       .then((data) => setCurrentUserId(data.id))
       .catch(() => setCurrentUserId(null));
-  }, []);
+  }, [fetchEstablishments, fetchUsers]);
 
   useEffect(() => {
     if (!selectedEtablissementId && establishments.length > 0) {
@@ -136,7 +135,7 @@ export function AdminEstablishmentSection() {
     void fetchArticles(selectedEtablissementId);
     void fetchCategories(selectedEtablissementId);
     setSelectedCategoryId("");
-  }, [establishments, selectedEtablissementId]);
+  }, [establishments, fetchArticles, fetchCategories, selectedEtablissementId]);
 
   const filteredArticles = useMemo(() => {
     if (!selectedCategoryId) return articles;
@@ -164,10 +163,7 @@ export function AdminEstablishmentSection() {
   );
 
   const assignedUsers = useMemo(
-    () =>
-      selectedEtablissement
-        ? users.filter((user) => user.etablissementId === selectedEtablissement.id)
-        : [],
+    () => (selectedEtablissement ? users.filter((user) => user.etablissementId === selectedEtablissement.id) : []),
     [users, selectedEtablissement],
   );
 
@@ -255,26 +251,26 @@ export function AdminEstablishmentSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.45em] text-slate-500">Administrateur etablissement</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">Pilotage des etablissements</h2>
-          <p className="mt-1 max-w-3xl text-slate-500">
-            {isTenantAdmin
-              ? "Gerez votre etablissement : utilisateurs rattaches et stock resume."
-              : "Creez un etablissement puis cliquez dans la liste pour consulter les roles attribues, ajouter des comptes et suivre la repartition des droits."}
-          </p>
-        </div>
-        {!isTenantAdmin ? (
-          <button
-            type="button"
-            onClick={() => setEstablishmentDialogOpen(true)}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Nouvel etablissement
-          </button>
-        ) : null}
-      </div>
+      <SectionHeader
+        eyebrow="Administrateur etablissement"
+        title="Pilotage des etablissements"
+        description={
+          isTenantAdmin
+            ? "Gerez votre etablissement : utilisateurs rattaches et stock resume."
+            : "Creez un etablissement puis selectionnez-le pour consulter les roles attribues, ajouter des comptes et suivre la repartition des droits."
+        }
+        actions={
+          !isTenantAdmin ? (
+            <button
+              type="button"
+              onClick={() => setEstablishmentDialogOpen(true)}
+              className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 hover:bg-emerald-600"
+            >
+              Nouvel etablissement
+            </button>
+          ) : null
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {!isTenantAdmin ? (
@@ -285,7 +281,16 @@ export function AdminEstablishmentSection() {
             ) : error ? (
               <p className="text-sm text-rose-600">{error}</p>
             ) : establishments.length === 0 ? (
-              <p className="text-sm text-slate-500">Aucun etablissement pour le moment.</p>
+              <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 p-4 text-sm text-slate-700">
+                <p>Aucun etablissement pour le moment.</p>
+                <button
+                  type="button"
+                  onClick={() => setEstablishmentDialogOpen(true)}
+                  className="self-start rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600"
+                >
+                  Creer un etablissement
+                </button>
+              </div>
             ) : (
               <div className="mt-4 space-y-3 text-sm">
                 {establishments.map((etab) => (
@@ -313,16 +318,14 @@ export function AdminEstablishmentSection() {
                         Actif
                       </span>
                     </button>
-                    {!isTenantAdmin ? (
-                      <div className="flex items-center gap-3 border-t border-slate-100 px-4 py-2 text-xs font-semibold">
-                        <button type="button" onClick={() => handleOpenEstablishmentEdit(etab)} className="text-slate-900 underline">
-                          Renommer
-                        </button>
-                        <button type="button" onClick={() => handleDeleteEstablishment(etab)} className="text-rose-600 underline">
-                          Supprimer
-                        </button>
-                      </div>
-                    ) : null}
+                    <div className="flex items-center gap-3 border-t border-slate-100 px-4 py-2 text-xs font-semibold">
+                      <button type="button" onClick={() => handleOpenEstablishmentEdit(etab)} className="text-slate-900 underline">
+                        Renommer
+                      </button>
+                      <button type="button" onClick={() => handleDeleteEstablishment(etab)} className="text-rose-600 underline">
+                        Supprimer
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -330,7 +333,7 @@ export function AdminEstablishmentSection() {
           </Card>
         ) : (
           <Card>
-            <CardHeader title="Mon établissement" />
+            <CardHeader title="Mon etablissement" />
             {loading ? (
               <p className="text-sm text-slate-500">Chargement...</p>
             ) : error ? (
@@ -352,7 +355,6 @@ export function AdminEstablishmentSection() {
           <CardHeader title="Vue detaillee" />
           {selectedEtablissement ? (
             <div className="space-y-5">
-
               <div className="grid gap-3 sm:grid-cols-3">
                 {roleDisplayOrder.map((roleKey) => (
                   <div key={roleKey} className="rounded-2xl border border-slate-200 px-4 py-3">
@@ -388,42 +390,43 @@ export function AdminEstablishmentSection() {
                   assignedUsers
                     .filter((user) => user.id !== currentUserId)
                     .map((user) => {
-                    const isSelf = currentUserId === user.id;
-                    return (
-                    <div key={user.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                      <div>
-                        <p className="font-semibold text-slate-900">{user.nom}</p>
-                        <p className="text-xs text-slate-500">{user.email}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {ROLE_LABELS[user.role] ?? user.role}
-                        </span>
-                        {!isSelf ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(user)}
-                              className="text-xs font-semibold text-slate-900 underline disabled:opacity-50"
-                              disabled={isTenantAdmin && user.role === "admin"}
-                            >
-                              Modifier
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteUser(user)}
-                              className="text-xs font-semibold text-rose-600 underline disabled:opacity-50"
-                              disabled={deletingUserId === user.id || (isTenantAdmin && user.role === "admin")}
-                            >
-                              {deletingUserId === user.id ? "Suppression..." : "Supprimer"}
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Vous</span>
-                        )}
-                      </div>
-                    </div>
-                  )})
+                      const isSelf = currentUserId === user.id;
+                      return (
+                        <div key={user.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                          <div>
+                            <p className="font-semibold text-slate-900">{user.nom}</p>
+                            <p className="text-xs text-slate-500">{user.email}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                              {ROLE_LABELS[user.role] ?? user.role}
+                            </span>
+                            {!isSelf ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEdit(user)}
+                                  className="text-xs font-semibold text-slate-900 underline disabled:opacity-50"
+                                  disabled={isTenantAdmin && user.role === "admin"}
+                                >
+                                  Modifier
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUser(user)}
+                                  className="text-xs font-semibold text-rose-600 underline disabled:opacity-50"
+                                  disabled={deletingUserId === user.id || (isTenantAdmin && user.role === "admin")}
+                                >
+                                  {deletingUserId === user.id ? "Suppression..." : "Supprimer"}
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Vous</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
                 )}
               </div>
             </div>
@@ -437,17 +440,17 @@ export function AdminEstablishmentSection() {
         <CardHeader title="Stock de l'etablissement" subtitle="Articles et quantites disponibles" />
         {selectedEtablissement ? (
           articlesLoading ? (
-            <p className="text-sm text-slate-500 px-4 py-3">Chargement...</p>
+            <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
           ) : articlesError ? (
-            <p className="text-sm text-rose-600 px-4 py-3">{articlesError}</p>
+            <p className="px-4 py-3 text-sm text-rose-600">{articlesError}</p>
           ) : filteredArticles.length === 0 ? (
-            <p className="text-sm text-slate-500 px-4 py-3">Aucun article pour cet etablissement.</p>
+            <p className="px-4 py-3 text-sm text-slate-500">Aucun article pour cet etablissement.</p>
           ) : (
             <div className="mt-4 overflow-x-auto text-sm">
               {categories.length > 0 ? (
                 <div className="mb-3 flex flex-wrap gap-3 px-2">
                   <label className="flex items-center gap-2 text-sm text-slate-700">
-                    Catégorie
+                    Categorie
                     <select
                       className="rounded-full border border-slate-300 px-3 py-1"
                       value={selectedCategoryId}
@@ -485,24 +488,24 @@ export function AdminEstablishmentSection() {
                       return a.nom.localeCompare(b.nom);
                     })
                     .map((article) => {
-                    const isLow = article.quantite <= article.seuilAlerte;
-                    return (
-                      <tr key={article.id}>
-                        <td className="py-3 pr-6 font-semibold text-slate-900">{article.nom}</td>
-                        <td className="py-3 pr-6 text-slate-500">{article.referenceFournisseur ?? "—"}</td>
-                        <td className="py-3 pr-6">
-                          <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.quantite}</span>
-                        </td>
-                        <td className="py-3">{article.seuilAlerte}</td>
-                      </tr>
-                    );
-                  })}
+                      const isLow = article.quantite <= article.seuilAlerte;
+                      return (
+                        <tr key={article.id}>
+                          <td className="py-3 pr-6 font-semibold text-slate-900">{article.nom}</td>
+                          <td className="py-3 pr-6 text-slate-500">{article.referenceFournisseur ?? "—"}</td>
+                          <td className="py-3 pr-6">
+                            <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.quantite}</span>
+                          </td>
+                          <td className="py-3">{article.seuilAlerte}</td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
           )
         ) : (
-          <p className="text-sm text-slate-500 px-4 py-3">Selectionnez un etablissement pour voir le stock.</p>
+          <p className="px-4 py-3 text-sm text-slate-500">Selectionnez un etablissement pour voir le stock.</p>
         )}
       </Card>
 

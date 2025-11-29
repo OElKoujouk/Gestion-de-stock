@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ export function ProductsSection() {
   const [articleError, setArticleError] = useState<string | null>(null);
   const [savingArticleId, setSavingArticleId] = useState<string | null>(null);
   const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const targetTenantId = isSuperAdmin ? selectedTenantId || "" : undefined;
   const readyToManage = canManage && (!isSuperAdmin || Boolean(targetTenantId));
@@ -114,11 +116,11 @@ export function ProductsSection() {
   const handleCreateCategory = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSuperAdmin && !targetTenantId) {
-      setCategoryError("Choisissez un établissement");
+      setCategoryError("Choisissez un établissement.");
       return;
     }
     if (!categoryName.trim()) {
-      setCategoryError("Nom requis");
+      setCategoryError("Le nom est requis.");
       return;
     }
     setCategoryError(null);
@@ -137,11 +139,11 @@ export function ProductsSection() {
   const handleCreateArticle = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSuperAdmin && !targetTenantId) {
-      setArticleError("Choisissez un établissement");
+      setArticleError("Choisissez un établissement.");
       return;
     }
     if (!articleForm.nom.trim()) {
-      setArticleError("Nom requis");
+      setArticleError("Le nom est requis.");
       return;
     }
     setArticleError(null);
@@ -185,7 +187,7 @@ export function ProductsSection() {
   };
 
   const handleDeleteArticle = async (articleId: string, articleName: string) => {
-    if (!window.confirm(`Supprimer le produit "${articleName}" ?`)) return;
+    if (!window.confirm(`Supprimer le produit « ${articleName} » ?`)) return;
     setDeletingArticleId(articleId);
     try {
       await api.deleteArticle(articleId);
@@ -197,9 +199,19 @@ export function ProductsSection() {
     }
   };
 
+  const visibleArticles = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return articles;
+    return articles.filter(
+      (article) =>
+        article.nom.toLowerCase().includes(query) ||
+        (article.referenceFournisseur ?? "").toLowerCase().includes(query),
+    );
+  }, [articles, searchTerm]);
+
   const articlesGroupedByCategory = useMemo(() => {
     const grouped = new Map<string, { label: string; items: Article[] }>();
-    articles.forEach((article) => {
+    visibleArticles.forEach((article) => {
       const catId = article.categorieId ?? "uncategorized";
       const label = article.categorieId ? categories.find((c) => c.id === catId)?.nom ?? "Catégorie inconnue" : "Sans catégorie";
       if (!grouped.has(catId)) {
@@ -208,16 +220,31 @@ export function ProductsSection() {
       grouped.get(catId)!.items.push(article);
     });
     return Array.from(grouped.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [articles, categories]);
+  }, [visibleArticles, categories]);
+
+  const alertCount = useMemo(() => articles.filter((article) => article.quantite <= article.seuilAlerte).length, [articles]);
+
+  const stats = [
+    { label: "Produits", value: articles.length },
+    { label: "Catégories", value: categories.length },
+    { label: "Alertes seuil", value: alertCount },
+  ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.45em] text-slate-500">Gestion des produits</p>
-        <h2 className="mt-2 text-3xl font-semibold text-slate-900">Catalogue par établissement</h2>
-        <p className="mt-1 max-w-3xl text-slate-500">
-          Administrateurs, responsables magasin et le super-admin structurent le stock établissement par établissement : catégories, produits, quantités et seuils d'alerte.
-        </p>
+      <SectionHeader
+        eyebrow="Gestion des produits"
+        title="Catalogue par établissement"
+        description="Administrateurs, responsables magasin et super-admin structurent le stock : catégories, produits, quantités et seuils d’alerte. Les écrans ci-dessous sont branchés sur l’API réelle."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{stat.label}</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{stat.value}</p>
+          </div>
+        ))}
       </div>
 
       {isSuperAdmin ? (
@@ -231,7 +258,7 @@ export function ProductsSection() {
             <p className="text-sm text-slate-500">Aucun établissement disponible.</p>
           ) : (
             <select
-              className="mt-2 w-full rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900"
+              className="mt-3 w-full rounded-2xl border border-emerald-100 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm"
               value={selectedTenantId}
               onChange={(event) => setSelectedTenantId(event.target.value)}
             >
@@ -258,7 +285,7 @@ export function ProductsSection() {
             ) : (
               <ul className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                 {categories.map((category) => (
-                  <li key={category.id} className="flex items-center justify-between gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-sm">
+                  <li key={category.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
                     {editingCategoryId === category.id ? (
                       <form
                         className="flex w-full items-center gap-2"
@@ -286,7 +313,7 @@ export function ProductsSection() {
                           type="text"
                           value={categoryName}
                           onChange={(event) => setCategoryName(event.target.value)}
-                          className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-slate-400 focus:outline-none"
+                          className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
                         />
                         <button
                           type="submit"
@@ -327,7 +354,7 @@ export function ProductsSection() {
                             className="text-xs font-semibold text-rose-600 underline disabled:opacity-50"
                             disabled={categorySubmitting}
                             onClick={async () => {
-                              if (!window.confirm(`Supprimer la catégorie "${category.nom}" ?`)) return;
+                              if (!window.confirm(`Supprimer la catégorie « ${category.nom} » ?`)) return;
                               setCategorySubmitting(true);
                               setCategoryError(null);
                               try {
@@ -359,7 +386,7 @@ export function ProductsSection() {
                   type="text"
                   value={categoryName}
                   onChange={(event) => setCategoryName(event.target.value)}
-                  className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                  className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                   placeholder="Ex : Fournitures"
                 />
               </label>
@@ -378,7 +405,7 @@ export function ProductsSection() {
           </Card>
 
           <Card className="bg-gradient-to-br from-white to-slate-50">
-            <CardHeader title="Créer un produit" subtitle="Réservé à l'établissement sélectionné" />
+            <CardHeader title="Créer un produit" subtitle="Réservé à l’établissement sélectionné" />
             <form className="space-y-4" onSubmit={handleCreateArticle}>
               <div className="grid gap-4">
                 <label className="text-sm font-medium text-slate-700">
@@ -387,7 +414,7 @@ export function ProductsSection() {
                     type="text"
                     value={articleForm.nom}
                     onChange={(event) => setArticleForm((prev) => ({ ...prev, nom: event.target.value }))}
-                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                     required
                   />
                 </label>
@@ -396,7 +423,7 @@ export function ProductsSection() {
                   <select
                     value={articleForm.categorieId}
                     onChange={(event) => setArticleForm((prev) => ({ ...prev, categorieId: event.target.value }))}
-                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                   >
                     <option value="">Aucune</option>
                     {categories.map((category) => (
@@ -414,18 +441,18 @@ export function ProductsSection() {
                       min={0}
                       value={articleForm.quantite}
                       onChange={(event) => setArticleForm((prev) => ({ ...prev, quantite: Number(event.target.value) }))}
-                      className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                      className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                       required
                     />
                   </label>
                   <label className="text-sm font-medium text-slate-700">
-                    Seuil d&apos;alerte
+                    Seuil d’alerte
                     <input
                       type="number"
                       min={0}
                       value={articleForm.seuilAlerte}
                       onChange={(event) => setArticleForm((prev) => ({ ...prev, seuilAlerte: Number(event.target.value) }))}
-                      className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                      className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                       required
                     />
                   </label>
@@ -436,13 +463,13 @@ export function ProductsSection() {
                     type="text"
                     value={articleForm.referenceFournisseur}
                     onChange={(event) => setArticleForm((prev) => ({ ...prev, referenceFournisseur: event.target.value }))}
-                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                   />
                 </label>
               </div>
               {articleError ? <p className="text-sm text-rose-600">{articleError}</p> : null}
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>Complétez tous les champs obligatoires avant de créer le produit.</span>
+              <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <span>Complétez les champs obligatoires avant de créer le produit.</span>
                 <button
                   type="submit"
                   className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
@@ -464,7 +491,23 @@ export function ProductsSection() {
       )}
 
       <Card>
-        <CardHeader title="Catalogue" subtitle="Tous les produits regroupés par catégorie" />
+        <CardHeader
+          title="Catalogue"
+          subtitle="Tous les produits regroupés par catégorie"
+          action={
+            readyToManage ? (
+              <div className="flex flex-wrap gap-3 text-sm">
+                <input
+                  type="search"
+                  placeholder="Rechercher un produit ou une référence"
+                  className="w-64 rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
+              </div>
+            ) : null
+          }
+        />
         {loading.articles ? (
           <p className="text-sm text-slate-500">Chargement...</p>
         ) : errors.articles ? (
@@ -474,7 +517,7 @@ export function ProductsSection() {
         ) : (
           <div className="mt-4 space-y-4 text-sm">
             {articlesGroupedByCategory.map((group) => (
-              <div key={group.label} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div key={group.label} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Catégorie</p>
@@ -502,7 +545,7 @@ export function ProductsSection() {
                         <div key={article.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3 sm:py-2">
                           <div className="col-span-4 sm:col-span-4">
                             <input
-                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-slate-400 focus:outline-none"
+                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
                               value={article.nom}
                               disabled={disableEdit}
                               onChange={(event) =>
@@ -513,7 +556,7 @@ export function ProductsSection() {
                           </div>
                           <div className="col-span-3 sm:col-span-3">
                             <input
-                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-slate-400 focus:outline-none"
+                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
                               value={article.referenceFournisseur ?? ""}
                               disabled={disableEdit}
                               onChange={(event) =>
@@ -529,7 +572,7 @@ export function ProductsSection() {
                               type="number"
                               min={0}
                               className={cn(
-                                "w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-slate-400 focus:outline-none",
+                                "w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none",
                                 inAlert ? "text-rose-600" : "text-slate-900",
                               )}
                               value={article.quantite}
@@ -546,7 +589,7 @@ export function ProductsSection() {
                             <input
                               type="number"
                               min={0}
-                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-slate-400 focus:outline-none"
+                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
                               value={article.seuilAlerte}
                               disabled={disableEdit}
                               onChange={(event) =>
@@ -567,6 +610,11 @@ export function ProductsSection() {
                               >
                                 {deletingArticleId === article.id ? "Suppression..." : "Supprimer"}
                               </button>
+                            </div>
+                          ) : null}
+                          {inAlert ? (
+                            <div className="col-span-12 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
+                              Niveau d’alerte atteint (quantité ≤ seuil)
                             </div>
                           ) : null}
                         </div>

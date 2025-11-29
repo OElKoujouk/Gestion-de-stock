@@ -9,7 +9,7 @@ export function Card({ children, className }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200",
+        "rounded-3xl border border-slate-200/70 bg-white/90 p-6 shadow-xl shadow-slate-900/5 backdrop-blur",
         className,
       )}
     >
@@ -26,9 +26,9 @@ type CardHeaderProps = {
 
 export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <p className="text-base font-semibold text-slate-900">{title}</p>
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="space-y-1.5">
+        <p className="text-base font-semibold leading-5 text-slate-900">{title}</p>
         {subtitle ? (
           <p className="text-sm text-slate-500">{subtitle}</p>
         ) : null}

@@ -61,7 +61,7 @@ export function EditEstablishmentDialog({ open, establishment, onOpenChange, onU
       onUpdated(updated);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de mettre a jour l'etablissement");
+      setError(err instanceof Error ? err.message : "Impossible de mettre à jour l’établissement");
     } finally {
       setLoading(false);
     }
@@ -71,10 +71,10 @@ export function EditEstablishmentDialog({ open, establishment, onOpenChange, onU
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-lg">
         <Card>
-          <CardHeader title="Modifier l'etablissement" subtitle="Mettre a jour l'adresse et les informations" />
+          <CardHeader title="Modifier l’établissement" subtitle="Mettre à jour l'adresse et les informations" />
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="text-sm font-medium text-slate-700">
-              Nom de l'etablissement
+              Nom de l’établissement
               <input type="text" value={form.nom} onChange={(event) => setForm((prev) => ({ ...prev, nom: event.target.value }))} className="mt-1" required />
             </label>
             <label className="text-sm font-medium text-slate-700">

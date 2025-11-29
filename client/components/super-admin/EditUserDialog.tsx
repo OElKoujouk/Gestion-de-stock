@@ -54,7 +54,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
       onUpdated();
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de mettre à jour l'utilisateur");
+      setError(err instanceof Error ? err.message : "Impossible de mettre à jour l’utilisateur");
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-xl">
         <Card>
-          <CardHeader title="Modifier l'utilisateur" subtitle="Mettre à jour rôle, profil et état" />
+          <CardHeader title="Modifier l’utilisateur" subtitle="Mettre à jour rôle, profil et état" />
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="text-sm font-medium text-slate-700">
               Nom complet
@@ -79,7 +79,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
               <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} className="mt-1">
                 <option value="admin">Administrateur établissement</option>
                 <option value="responsable">Responsable magasin</option>
-                <option value="agent">Agent d'entretien</option>
+                <option value="agent">Agent d’entretien</option>
               </select>
             </label>
             {canSelectTenant ? (

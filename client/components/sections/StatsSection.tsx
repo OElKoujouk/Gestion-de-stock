@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
 import { api } from "@/lib/api";
 
 export function StatsSection() {
   const [articles, setArticles] = useState<Array<{ id: string; nom: string; quantite: number; seuilAlerte: number }> | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     api
       .stats()
@@ -13,25 +15,33 @@ export function StatsSection() {
       .catch((err) => setError(err instanceof Error ? err.message : "Impossible de récupérer les statistiques"));
   }, []);
 
+  const alertCount = useMemo(
+    () => (articles ? articles.filter((article) => article.quantite <= article.seuilAlerte).length : 0),
+    [articles],
+  );
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.45em] text-slate-500">Statistiques MVP</p>
-        <h2 className="mt-2 text-3xl font-semibold text-slate-900">Indicateurs essentiels</h2>
-        <p className="mt-1 max-w-3xl text-slate-500">
-          Focus sur les indicateurs inclus dans le MVP : niveaux de stock, alertes, consommation par agent et période.
-        </p>
-      </div>
+      <SectionHeader
+        eyebrow="Statistiques MVP"
+        title="Indicateurs essentiels"
+        description="Focus sur les indicateurs inclus dans le MVP : niveaux de stock, alertes, consommation par agent et période."
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {articles ? (
-          <Card>
-            <p className="text-sm text-slate-500">Articles (API)</p>
-            <p className="mt-1 text-3xl font-semibold text-slate-900">{articles.length}</p>
-            <p className="text-sm text-slate-500">
-              {articles.filter((article) => article.quantite <= article.seuilAlerte).length} en alerte
-            </p>
-          </Card>
+          <>
+            <Card>
+              <p className="text-sm text-slate-500">Articles (API)</p>
+              <p className="mt-1 text-3xl font-semibold text-slate-900">{articles.length}</p>
+              <p className="text-sm text-slate-500">Nombre total d’articles disponibles.</p>
+            </Card>
+            <Card>
+              <p className="text-sm text-slate-500">Alertes de stock</p>
+              <p className="mt-1 text-3xl font-semibold text-rose-600">{alertCount}</p>
+              <p className="text-sm text-slate-500">Produits au seuil ou en dessous.</p>
+            </Card>
+          </>
         ) : error ? (
           <Card>
             <p className="text-sm text-slate-500">Articles (API)</p>
@@ -40,7 +50,7 @@ export function StatsSection() {
         ) : (
           <Card>
             <p className="text-sm text-slate-500">Articles (API)</p>
-            <p className="text-sm text-slate-400">Chargement…</p>
+            <p className="text-sm text-slate-400">Chargement...</p>
           </Card>
         )}
       </div>

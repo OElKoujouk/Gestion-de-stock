@@ -65,7 +65,7 @@ export function CreateUserForm({
       onCreated();
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de creer l'utilisateur");
+      setError(err instanceof Error ? err.message : "Impossible de créer l’utilisateur");
     } finally {
       setLoading(false);
     }
@@ -77,14 +77,14 @@ export function CreateUserForm({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-xl">
         <Card>
-          <CardHeader title="Nouvel utilisateur" subtitle="Attribuez un role et un etablissement" />
+          <CardHeader title="Nouvel utilisateur" subtitle="Attribuez un rôle et un établissement" />
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="text-sm font-medium text-slate-700">
               Nom complet
               <input type="text" value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} className="mt-1" required />
             </label>
             <label className="text-sm font-medium text-slate-700">
-              Identifiant / Email
+              Identifiant / email
               <input type="text" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="mt-1" required />
             </label>
             <label className="text-sm font-medium text-slate-700">
@@ -92,25 +92,23 @@ export function CreateUserForm({
               <input type="password" value={form.motDePasse} onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))} className="mt-1" required />
             </label>
             <label className="text-sm font-medium text-slate-700">
-              Role
+              Rôle
               <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} className="mt-1">
-                <option value="admin">Administrateur etablissement</option>
+                <option value="admin">Administrateur établissement</option>
                 <option value="responsable">Responsable magasin</option>
-                <option value="agent">Agent d'entretien</option>
+                <option value="agent">Agent d’entretien</option>
               </select>
             </label>
             {forcedTenantId ? (
               <div className="text-sm font-medium text-slate-700">
-                Etablissement
+                Établissement
                 <p className="mt-1 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-600">
-                  {forcedTenantLabel ??
-                    establishments.find((etab) => etab.id === forcedTenantId)?.nom ??
-                    "Aucun (Global)"}
+                  {forcedTenantLabel ?? establishments.find((etab) => etab.id === forcedTenantId)?.nom ?? "Aucun (Global)"}
                 </p>
               </div>
             ) : showTenantSelect ? (
               <label className="text-sm font-medium text-slate-700">
-                Etablissement
+                Établissement
                 <select value={form.etablissementId} onChange={(e) => setForm((f) => ({ ...f, etablissementId: e.target.value }))} className="mt-1" required>
                   <option value="">Aucun (Global)</option>
                   {establishments.map((etab) => (
@@ -127,7 +125,7 @@ export function CreateUserForm({
                 Annuler
               </button>
               <button type="submit" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                {loading ? "Creation..." : "Creer"}
+                {loading ? "Création..." : "Créer"}
               </button>
             </div>
           </form>

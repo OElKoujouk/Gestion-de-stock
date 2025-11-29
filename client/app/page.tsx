@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 
 const SECTION_ORDER = [
   "superAdmin",
+  "establishments",
   "admin",
   "responsable",
   "agent",
@@ -35,26 +36,42 @@ const SECTION_ORDER = [
 
 type SectionId = (typeof SECTION_ORDER)[number];
 
+const NAV_ICONS: Record<SectionId, string> = {
+  superAdmin: "🏛",
+  establishments: "🏢",
+  admin: "🏫",
+  responsable: "📦",
+  agent: "🧹",
+  products: "📦",
+  movements: "🔄",
+  internalOrders: "🧾",
+  supplierOrders: "🚚",
+  users: "👥",
+  stats: "📊",
+  auth: "🔐",
+};
+
 const baseNavGroups: NavGroup<SectionId>[] = [
   {
     title: "Roles utilisateurs",
     items: [
-      { id: "superAdmin", label: "Super-Admin", icon: "🛡️" },
-      { id: "admin", label: "Mon établissement", icon: "🏢" },
-      { id: "responsable", label: "Responsable magasin", icon: "🧰" },
-      { id: "agent", label: "Agent d'entretien", icon: "🧹" },
+      { id: "superAdmin", label: "Super-admin", icon: NAV_ICONS.superAdmin },
+      { id: "establishments", label: "Etablissements", icon: NAV_ICONS.establishments },
+      { id: "admin", label: "Mon etablissement", icon: NAV_ICONS.admin },
+      { id: "responsable", label: "Responsable magasin", icon: NAV_ICONS.responsable },
+      { id: "agent", label: "Agent d'entretien", icon: NAV_ICONS.agent },
     ],
   },
   {
-    title: "Operations metiers",
+    title: "Operations metier",
     items: [
-      { id: "products", label: "Produits", icon: "📦" },
-      { id: "movements", label: "Mouvements", icon: "🔁" },
-      { id: "internalOrders", label: "Commandes internes", icon: "🧾" },
-      { id: "supplierOrders", label: "Commandes fournisseurs", icon: "🚚" },
-      { id: "users", label: "Utilisateurs", icon: "👥" },
-      { id: "stats", label: "Statistiques", icon: "📊" },
-      { id: "auth", label: "Authentification", icon: "🔐" },
+      { id: "products", label: "Produits", icon: NAV_ICONS.products },
+      { id: "movements", label: "Mouvements", icon: NAV_ICONS.movements },
+      { id: "internalOrders", label: "Commandes internes", icon: NAV_ICONS.internalOrders },
+      { id: "supplierOrders", label: "Commandes fournisseurs", icon: NAV_ICONS.supplierOrders },
+      { id: "users", label: "Utilisateurs", icon: NAV_ICONS.users },
+      { id: "stats", label: "Statistiques", icon: NAV_ICONS.stats },
+      { id: "auth", label: "Authentification", icon: NAV_ICONS.auth },
     ],
   },
 ];
@@ -62,7 +79,7 @@ const baseNavGroups: NavGroup<SectionId>[] = [
 const publicNavGroups: NavGroup<SectionId>[] = [
   {
     title: "Connexion",
-    items: [{ id: "auth", label: "Authentification", icon: "🔐" }],
+    items: [{ id: "auth", label: "Authentification", icon: NAV_ICONS.auth }],
   },
 ];
 
@@ -71,6 +88,7 @@ const ROLE_STORAGE_KEY = "gestion-stock:role";
 
 const sectionComponents: Record<SectionId, React.ComponentType> = {
   superAdmin: SuperAdminSection,
+  establishments: AdminEstablishmentSection,
   admin: AdminEstablishmentSection,
   responsable: StoreManagerSection,
   agent: AgentSection,
@@ -92,16 +110,36 @@ function isRoleSelection(value: string | null): value is RoleSelection {
 }
 
 const ROLE_SECTIONS: Record<RoleSelection, SectionId[]> = {
-  superAdmin: ["superAdmin", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
-  admin: ["admin", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
+  superAdmin: ["superAdmin", "establishments", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
+  admin: ["establishments", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
   responsable: ["responsable", "products", "movements", "internalOrders", "stats"],
   agent: ["agent", "internalOrders"],
 };
 
 export default function HomePage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentRole, setCurrentRole] = useState<RoleSelection | null>(null);
-  const [activeSection, setActiveSection] = useState<SectionId>("auth");
+  const initialSession = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    const storedRole = sessionStorage.getItem(ROLE_STORAGE_KEY);
+    const initialHash = window.location.hash.replace("#", "");
+    return {
+      storedToken,
+      storedRole: isRoleSelection(storedRole) ? storedRole : null,
+      initialHash: isSectionId(initialHash) ? initialHash : null,
+    };
+  }, []);
+
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(initialSession?.storedToken && initialSession?.storedRole));
+  const [currentRole, setCurrentRole] = useState<RoleSelection | null>(() => initialSession?.storedRole ?? null);
+  const [activeSection, setActiveSection] = useState<SectionId>(() => {
+    if (initialSession?.storedToken && initialSession?.storedRole) {
+      const allowed = ROLE_SECTIONS[initialSession.storedRole] ?? ["auth"];
+      return allowed[0];
+    }
+    return initialSession?.initialHash ?? "auth";
+  });
 
   const sectionsToDisplay = useMemo(() => {
     if (isAuthenticated && currentRole) {
@@ -111,24 +149,10 @@ export default function HomePage() {
   }, [isAuthenticated, currentRole]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+    if (initialSession?.storedToken) {
+      setAccessToken(initialSession.storedToken);
     }
-    const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
-    const storedRole = sessionStorage.getItem(ROLE_STORAGE_KEY);
-    if (storedToken && isRoleSelection(storedRole)) {
-      setAccessToken(storedToken);
-      setIsAuthenticated(true);
-      setCurrentRole(storedRole);
-      const allowedSections = ROLE_SECTIONS[storedRole] ?? ["auth"];
-      setActiveSection(allowedSections[0]);
-    } else {
-      const initialHash = window.location.hash.replace("#", "");
-      if (isSectionId(initialHash)) {
-        setActiveSection(initialHash);
-      }
-    }
-  }, []);
+  }, [initialSession]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -156,6 +180,14 @@ export default function HomePage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       window.location.hash = activeSection;
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
     }
   }, [activeSection]);
 
@@ -206,29 +238,51 @@ export default function HomePage() {
   }, [isAuthenticated, currentRole]);
 
   const roleLabelMap: Record<RoleSelection, string> = {
-    superAdmin: "Super-Admin",
-    admin: "Admin établissement",
+    superAdmin: "Super-admin",
+    admin: "Admin etablissement",
     responsable: "Responsable magasin",
     agent: "Agent",
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-100 text-slate-900">
+    <div className="flex min-h-screen">
       <Sidebar groups={sidebarGroups} active={activeSection} onSelect={setActiveSection} />
-      <div className="flex flex-1 flex-col lg:ml-64">
+      <div className="flex flex-1 flex-col lg:ml-72">
         <MobileNav groups={sidebarGroups} active={activeSection} onSelect={setActiveSection} />
         <AuthProvider value={{ role: currentRole, isAuthenticated }}>
-          <main className="flex-1 space-y-10 px-4 py-6 sm:px-6 lg:px-10">
+          <main className="flex-1 space-y-5 px-4 py-6 sm:px-6 lg:px-12">
+            <div className="rounded-xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-3 shadow-sm shadow-emerald-200/60">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Console multi-etablissement</p>
+                  <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Tableau de bord</h1>
+                </div>
+                <div className="flex flex-col items-end gap-1 text-xs text-slate-800">
+                  <span className="rounded-full bg-emerald-200 px-3 py-1 font-semibold text-emerald-900">
+                    {sidebarGroups.flatMap((g) => g.items).find((i) => i.id === activeSection)?.label ?? "Authentification"}
+                  </span>
+                  <span className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1 font-semibold text-slate-900">
+                    {isAuthenticated && currentRole ? roleLabelMap[currentRole] : "Connexion requise"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {isAuthenticated && currentRole ? (
-              <div className="flex flex-wrap items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-3 text-sm text-emerald-900 shadow-sm shadow-emerald-150/60">
                 <p>
-                  Connecté en tant que <span className="font-semibold text-slate-900">{roleLabelMap[currentRole]}</span>
+                  Connecte en tant que <span className="font-semibold">{roleLabelMap[currentRole]}</span>
                 </p>
-                <button type="button" onClick={handleLogout} className="text-sm font-semibold text-slate-900">
-                  Se déconnecter
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1 font-semibold text-emerald-900 hover:bg-white"
+                >
+                  Se deconnecter
                 </button>
               </div>
             ) : null}
+
             {sectionList
               .filter(({ id }) => sectionsToDisplay.includes(id))
               .map(({ id, Component }) => (

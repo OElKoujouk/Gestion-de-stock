@@ -1,15 +1,14 @@
 import { Card, CardHeader } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
 
 export function InternalOrdersSection() {
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.45em] text-slate-500">Commandes internes</p>
-        <h2 className="mt-2 text-3xl font-semibold text-slate-900">Flux agent → responsable</h2>
-        <p className="mt-1 max-w-3xl text-slate-500">
-          Les agents soumettent leurs besoins, le responsable magasin prépare la commande, peut modifier les quantités et le stock est mis à jour automatiquement.
-        </p>
-      </div>
+      <SectionHeader
+        eyebrow="Commandes internes"
+        title="Flux agent → responsable"
+        description="Les agents soumettent leurs besoins, le responsable magasin prépare la commande, peut modifier les quantités et le stock est mis à jour automatiquement."
+      />
 
       <Card>
         <CardHeader title="Aucun mock affiché" subtitle="Le workflow agent → responsable sera branché ici" />

@@ -6,17 +6,17 @@
   }
 
   body {
-    @apply min-h-screen bg-slate-100 text-slate-900;
-    font-family: var(--font-sans), "Inter", system-ui, -apple-system, sans-serif;
+    @apply min-h-screen text-slate-900;
+    font-family: var(--font-sans), "Space Grotesk", system-ui, -apple-system, sans-serif;
   }
 
   input,
   select,
   textarea {
-    @apply w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-900 placeholder-slate-400 focus-visible:border-slate-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/10;
+    @apply w-full rounded-2xl border border-slate-200 bg-white/80 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus-visible:border-emerald-500/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30;
   }
 
   button {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30;
   }
 }
