@@ -34,6 +34,9 @@ enum SupplierOrderStatus {
 model Establishment {
   id        String   @id @default(cuid())
   nom       String
+  adresse   String?
+  codePostal String? @map("code_postal")
+  ville     String?
   users     User[]
   articles  Article[]
   categories Category[]
@@ -82,7 +85,7 @@ model Article {
   categorie              Category? @relation(fields: [categorieId], references: [id])
   nom                    String
   quantite               Int
-  referenceFournisseur   String   @map("reference_fournisseur")
+  referenceFournisseur   String?  @map("reference_fournisseur")
   seuilAlerte            Int      @map("seuil_alerte")
   description            String? 
   conditionnement        String?

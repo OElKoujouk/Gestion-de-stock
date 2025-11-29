@@ -4,25 +4,25 @@ import { useEffect, useMemo, useState } from "react";
 
 import { MobileNav } from "@/components/layout/MobileNav";
 import { NavGroup, Sidebar } from "@/components/layout/Sidebar";
+import { AuthSection, type RoleSelection } from "@/components/sections/AuthSection";
 import { AdminEstablishmentSection } from "@/components/sections/AdminEstablishmentSection";
 import { AgentSection } from "@/components/sections/AgentSection";
-import { AuthSection, type RoleSelection } from "@/components/sections/AuthSection";
 import { InternalOrdersSection } from "@/components/sections/InternalOrdersSection";
 import { MovementsSection } from "@/components/sections/MovementsSection";
 import { ProductsSection } from "@/components/sections/ProductsSection";
 import { StatsSection } from "@/components/sections/StatsSection";
-import { StoreManagerSection } from "@/components/sections/StoreManagerSection";
 import { SuperAdminSection } from "@/components/sections/SuperAdminSection";
+import { StoreManagerSection } from "@/components/sections/StoreManagerSection";
 import { SupplierOrdersSection } from "@/components/sections/SupplierOrdersSection";
 import { UsersSection } from "@/components/sections/UsersSection";
-import { cn } from "@/lib/utils";
-import { setAccessToken } from "@/lib/api";
 import { AuthProvider } from "@/context/auth-context";
+import { setAccessToken } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const SECTION_ORDER = [
   "superAdmin",
   "admin",
-  "storeManager",
+  "responsable",
   "agent",
   "products",
   "movements",
@@ -35,21 +35,21 @@ const SECTION_ORDER = [
 
 type SectionId = (typeof SECTION_ORDER)[number];
 
-const navGroups: NavGroup<SectionId>[] = [
+const baseNavGroups: NavGroup<SectionId>[] = [
   {
-    title: "Rôles utilisateurs",
+    title: "Roles utilisateurs",
     items: [
-      { id: "superAdmin", label: "Super-Admin", icon: "🌐" },
-      { id: "admin", label: "Admin établissement", icon: "🏫" },
-      { id: "storeManager", label: "Responsable magasin", icon: "🗃️" },
-      { id: "agent", label: "Agent d’entretien", icon: "🧹" },
+      { id: "superAdmin", label: "Super-Admin", icon: "🛡️" },
+      { id: "admin", label: "Mon établissement", icon: "🏢" },
+      { id: "responsable", label: "Responsable magasin", icon: "🧰" },
+      { id: "agent", label: "Agent d'entretien", icon: "🧹" },
     ],
   },
   {
-    title: "Opérations métiers",
+    title: "Operations metiers",
     items: [
       { id: "products", label: "Produits", icon: "📦" },
-      { id: "movements", label: "Mouvements", icon: "🔄" },
+      { id: "movements", label: "Mouvements", icon: "🔁" },
       { id: "internalOrders", label: "Commandes internes", icon: "🧾" },
       { id: "supplierOrders", label: "Commandes fournisseurs", icon: "🚚" },
       { id: "users", label: "Utilisateurs", icon: "👥" },
@@ -66,10 +66,13 @@ const publicNavGroups: NavGroup<SectionId>[] = [
   },
 ];
 
+const TOKEN_STORAGE_KEY = "gestion-stock:token";
+const ROLE_STORAGE_KEY = "gestion-stock:role";
+
 const sectionComponents: Record<SectionId, React.ComponentType> = {
   superAdmin: SuperAdminSection,
   admin: AdminEstablishmentSection,
-  storeManager: StoreManagerSection,
+  responsable: StoreManagerSection,
   agent: AgentSection,
   products: ProductsSection,
   movements: MovementsSection,
@@ -84,23 +87,48 @@ function isSectionId(value: string): value is SectionId {
   return SECTION_ORDER.includes(value as SectionId);
 }
 
+function isRoleSelection(value: string | null): value is RoleSelection {
+  return value === "superAdmin" || value === "admin" || value === "responsable" || value === "agent";
+}
+
+const ROLE_SECTIONS: Record<RoleSelection, SectionId[]> = {
+  superAdmin: ["superAdmin", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
+  admin: ["admin", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
+  responsable: ["responsable", "products", "movements", "internalOrders", "stats"],
+  agent: ["agent", "internalOrders"],
+};
+
 export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentRole, setCurrentRole] = useState<RoleSelection | null>(null);
-  const [activeSection, setActiveSection] = useState<SectionId>(() => {
-    if (typeof window === "undefined") {
-      return "auth";
-    }
-    const initialHash = window.location.hash.replace("#", "");
-    return isSectionId(initialHash) ? initialHash : "auth";
-  });
+  const [activeSection, setActiveSection] = useState<SectionId>("auth");
 
   const sectionsToDisplay = useMemo(() => {
-    if (isAuthenticated) {
-      return SECTION_ORDER.filter((section) => section !== "auth");
+    if (isAuthenticated && currentRole) {
+      return ROLE_SECTIONS[currentRole] ?? ["auth"];
     }
     return ["auth"] as SectionId[];
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentRole]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    const storedRole = sessionStorage.getItem(ROLE_STORAGE_KEY);
+    if (storedToken && isRoleSelection(storedRole)) {
+      setAccessToken(storedToken);
+      setIsAuthenticated(true);
+      setCurrentRole(storedRole);
+      const allowedSections = ROLE_SECTIONS[storedRole] ?? ["auth"];
+      setActiveSection(allowedSections[0]);
+    } else {
+      const initialHash = window.location.hash.replace("#", "");
+      if (isSectionId(initialHash)) {
+        setActiveSection(initialHash);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -131,14 +159,24 @@ export default function HomePage() {
     }
   }, [activeSection]);
 
-  const handleLogin = async (token: string, role: RoleSelection) => {
+  const handleLogin = (token: string, role: RoleSelection) => {
     setAccessToken(token);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+      sessionStorage.setItem(ROLE_STORAGE_KEY, role);
+    }
+    const allowedSections = ROLE_SECTIONS[role] ?? ["auth"];
     setIsAuthenticated(true);
     setCurrentRole(role);
-    setActiveSection(role);
+    setActiveSection(allowedSections[0]);
   };
 
   const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(ROLE_STORAGE_KEY);
+    }
+    setAccessToken(null);
     setIsAuthenticated(false);
     setCurrentRole(null);
     setActiveSection("auth");
@@ -153,13 +191,25 @@ export default function HomePage() {
     [],
   );
 
-  const sidebarGroups = isAuthenticated ? navGroups : publicNavGroups;
+  const sidebarGroups = useMemo(() => {
+    if (!isAuthenticated) {
+      return publicNavGroups;
+    }
+    if (!currentRole) {
+      return baseNavGroups;
+    }
+    const allowed = new Set<SectionId>(ROLE_SECTIONS[currentRole] ?? ["auth"]);
+    return baseNavGroups.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => allowed.has(item.id)),
+    }));
+  }, [isAuthenticated, currentRole]);
 
   const roleLabelMap: Record<RoleSelection, string> = {
     superAdmin: "Super-Admin",
-    admin: "Administrateur",
-    storeManager: "Responsable magasin",
-    agent: "Agent d’entretien",
+    admin: "Admin établissement",
+    responsable: "Responsable magasin",
+    agent: "Agent",
   };
 
   return (

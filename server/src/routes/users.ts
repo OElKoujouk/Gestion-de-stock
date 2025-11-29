@@ -57,15 +57,51 @@ usersRouter.put("/:id", async (req, res) => {
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
   });
   if (!existing) return res.status(404).json({ message: "Utilisateur introuvable" });
-  const data: any = { ...req.body };
-  if (data.motDePasse) {
-    data.motDePasse = await bcrypt.hash(data.motDePasse, 10);
+
+  const { nom, email, role, actif, motDePasse, etablissementId } = req.body as {
+    nom?: string;
+    email?: string;
+    role?: string;
+    actif?: boolean;
+    motDePasse?: string;
+    etablissementId?: string | null;
+  };
+
+  if (!nom || !email || !role) {
+    return res.status(400).json({ message: "Nom, email et rôle sont obligatoires" });
   }
+
+  const data: any = {
+    nom,
+    email,
+    role,
+  };
+
+  if (typeof actif === "boolean") {
+    data.actif = actif;
+  }
+
+  if (motDePasse) {
+    data.motDePasse = await bcrypt.hash(motDePasse, 10);
+  }
+
+  if (!req.tenantId) {
+    data.etablissementId = typeof etablissementId === "undefined" ? existing.etablissementId : etablissementId ?? null;
+  }
+
   const user = await prisma.user.update({
     where: { id: existing.id },
     data,
   });
-  res.json({ id: user.id, nom: user.nom, email: user.email, role: user.role, actif: user.actif });
+
+  res.json({
+    id: user.id,
+    nom: user.nom,
+    email: user.email,
+    role: user.role,
+    actif: user.actif,
+    etablissementId: user.etablissementId,
+  });
 });
 
 usersRouter.patch("/:id/activation", async (req, res) => {

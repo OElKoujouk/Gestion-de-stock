@@ -4,21 +4,24 @@ import { prisma } from "../prisma";
 export const categoriesRouter = Router();
 
 categoriesRouter.get("/", async (req, res) => {
+  const { etablissementId } = req.query;
+  const where = req.tenantId ? { etablissementId: req.tenantId } : etablissementId ? { etablissementId: String(etablissementId) } : undefined;
   const categories = await prisma.category.findMany({
-    where: req.tenantId ? { etablissementId: req.tenantId } : undefined,
+    where,
     orderBy: { nom: "asc" },
   });
   res.json(categories);
 });
 
 categoriesRouter.post("/", async (req, res) => {
-  if (!req.tenantId) return res.status(400).json({ message: "Tenant requis" });
-  const { nom } = req.body as { nom?: string };
+  const { nom, etablissementId } = req.body as { nom?: string; etablissementId?: string | null };
   if (!nom) return res.status(400).json({ message: "Nom requis" });
+  const tenantId = req.tenantId ?? etablissementId;
+  if (!tenantId) return res.status(400).json({ message: "Tenant requis" });
   const category = await prisma.category.create({
     data: {
       nom,
-      etablissementId: req.tenantId,
+      etablissementId: tenantId,
     },
   });
   res.status(201).json(category);
