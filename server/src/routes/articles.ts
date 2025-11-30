@@ -108,7 +108,12 @@ articlesRouter.delete("/:id", async (req, res) => {
   if (!existing) {
     return res.status(404).json({ message: "Article introuvable" });
   }
-  await prisma.article.delete({ where: { id: existing.id } });
+  await prisma.$transaction([
+    prisma.demandeItem.deleteMany({ where: { articleId: existing.id } }),
+    prisma.supplierOrderItem.deleteMany({ where: { articleId: existing.id } }),
+    prisma.movement.deleteMany({ where: { articleId: existing.id } }),
+    prisma.article.delete({ where: { id: existing.id } }),
+  ]);
   res.status(204).send();
 });
 

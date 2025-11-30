@@ -170,13 +170,21 @@ export function ProductsSection() {
   const updateArticleField = async (articleId: string, patch: Partial<Article>) => {
     setSavingArticleId(articleId);
     try {
-      const updated = await api.updateArticle(articleId, {
-        nom: patch.nom,
-        referenceFournisseur: patch.referenceFournisseur ?? null,
-        quantite: patch.quantite,
-        seuilAlerte: patch.seuilAlerte,
-        categorieId: patch.categorieId ?? null,
-      });
+      const payload: Partial<{
+        nom: string;
+        referenceFournisseur: string | null;
+        quantite: number;
+        seuilAlerte: number;
+        categorieId: string | null;
+      }> = {};
+
+      if (patch.nom !== undefined) payload.nom = patch.nom;
+      if (patch.referenceFournisseur !== undefined) payload.referenceFournisseur = patch.referenceFournisseur ?? null;
+      if (patch.quantite !== undefined) payload.quantite = patch.quantite;
+      if (patch.seuilAlerte !== undefined) payload.seuilAlerte = patch.seuilAlerte;
+      if (patch.categorieId !== undefined) payload.categorieId = patch.categorieId ?? null;
+
+      const updated = await api.updateArticle(articleId, payload);
       setArticles((prev) => prev.map((item) => (item.id === articleId ? { ...item, ...updated } : item)));
       setArticleError(null);
     } catch (err) {

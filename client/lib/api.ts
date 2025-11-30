@@ -120,6 +120,41 @@ export const api = {
     request<void>(`/categories/${id}`, {
       method: "DELETE",
     }),
+  getDemandes: () =>
+    request<
+      Array<{
+        id: string;
+        statut: "en_attente" | "preparee" | "modifiee" | "refusee";
+        items: Array<{ id: string; articleId: string; quantiteDemandee: number; quantitePreparee: number }>;
+        agent?: { id: string; nom: string; email: string };
+        createdAt?: string;
+        updatedAt?: string;
+      }>
+    >("/demandes"),
+  createDemande: (payload: { items: Array<{ articleId: string; quantite: number }> }) =>
+    request<{ id: string }>(`/demandes`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  cancelDemande: (id: string) =>
+    request(`/demandes/${id}/cancel`, {
+      method: "PATCH",
+    }),
+  refuseDemande: (id: string) =>
+    request(`/demandes/${id}/refuse`, {
+      method: "PATCH",
+    }),
+  updateDemande: (
+    id: string,
+    payload: {
+      statut?: "en_attente" | "preparee" | "modifiee" | "refusee";
+      items?: Array<{ itemId: string; quantitePreparee: number }>;
+    },
+  ) =>
+    request(`/demandes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   getEstablishments: () =>
     request<Array<{ id: string; nom: string; createdAt: string; adresse: string | null; codePostal: string | null; ville: string | null }>>(
       "/etablissements",

@@ -36,14 +36,17 @@ demandesRouter.get("/", allowRoles("agent", "responsable", "admin"), async (req,
     etablissementId: req.tenantId,
     ...(req.user.role === "agent" ? { agentId: req.user.id } : {}),
   };
-  const demandes = await prisma.demande.findMany({ where, include: { items: true } });
+  const demandes = await prisma.demande.findMany({
+    where,
+    include: { items: true, agent: { select: { id: true, nom: true, email: true } } },
+  });
   res.json(demandes);
 });
 
 demandesRouter.get("/:id", allowRoles("agent", "responsable", "admin"), async (req, res) => {
   const demande = await prisma.demande.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
-    include: { items: true },
+    include: { items: true, agent: { select: { id: true, nom: true, email: true } } },
   });
   if (!demande) return res.status(404).json({ message: "Demande introuvable" });
   res.json(demande);
@@ -53,7 +56,7 @@ demandesRouter.get("/toutes", allowRoles("responsable", "admin"), async (req, re
   if (!req.tenantId) return res.status(400).json({ message: "Tenant requis" });
   const demandes = await prisma.demande.findMany({
     where: { etablissementId: req.tenantId },
-    include: { items: true },
+    include: { items: true, agent: { select: { id: true, nom: true, email: true } } },
   });
   res.json(demandes);
 });
@@ -93,4 +96,35 @@ demandesRouter.patch("/:id", allowRoles("responsable", "admin"), async (req, res
   }
 
   res.json(updatedDemande);
+});
+
+demandesRouter.patch("/:id/cancel", allowRoles("agent"), async (req, res) => {
+  if (!req.user || !req.tenantId) return res.status(400).json({ message: "Tenant requis" });
+  const demande = await prisma.demande.findFirst({
+    where: { id: req.params.id, etablissementId: req.tenantId, agentId: req.user.id },
+  });
+  if (!demande) return res.status(404).json({ message: "Demande introuvable" });
+  if (demande.statut !== "en_attente") {
+    return res.status(400).json({ message: "Seules les demandes en attente peuvent être annulées par l'agent" });
+  }
+  const updated = await prisma.demande.update({
+    where: { id: demande.id },
+    data: { statut: "refusee" },
+    include: { items: true },
+  });
+  res.json(updated);
+});
+
+demandesRouter.patch("/:id/refuse", allowRoles("responsable", "admin"), async (req, res) => {
+  const demande = await prisma.demande.findFirst({
+    where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
+    include: { items: true },
+  });
+  if (!demande) return res.status(404).json({ message: "Demande introuvable" });
+  const updated = await prisma.demande.update({
+    where: { id: demande.id },
+    data: { statut: "refusee" },
+    include: { items: true },
+  });
+  res.json(updated);
 });

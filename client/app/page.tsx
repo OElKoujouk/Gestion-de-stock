@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -7,7 +7,6 @@ import { NavGroup, Sidebar } from "@/components/layout/Sidebar";
 import { AuthSection, type RoleSelection } from "@/components/sections/AuthSection";
 import { AdminEstablishmentSection } from "@/components/sections/AdminEstablishmentSection";
 import { AgentSection } from "@/components/sections/AgentSection";
-import { InternalOrdersSection } from "@/components/sections/InternalOrdersSection";
 import { MovementsSection } from "@/components/sections/MovementsSection";
 import { ProductsSection } from "@/components/sections/ProductsSection";
 import { StatsSection } from "@/components/sections/StatsSection";
@@ -27,7 +26,6 @@ const SECTION_ORDER = [
   "agent",
   "products",
   "movements",
-  "internalOrders",
   "supplierOrders",
   "users",
   "stats",
@@ -37,14 +35,13 @@ const SECTION_ORDER = [
 type SectionId = (typeof SECTION_ORDER)[number];
 
 const NAV_ICONS: Record<SectionId, string> = {
-  superAdmin: "🏛",
+  superAdmin: "🛡️",
   establishments: "🏢",
-  admin: "🏫",
-  responsable: "📦",
+  admin: "🏠",
+  responsable: "🧰",
   agent: "🧹",
   products: "📦",
-  movements: "🔄",
-  internalOrders: "🧾",
+  movements: "🔁",
   supplierOrders: "🚚",
   users: "👥",
   stats: "📊",
@@ -53,21 +50,15 @@ const NAV_ICONS: Record<SectionId, string> = {
 
 const baseNavGroups: NavGroup<SectionId>[] = [
   {
-    title: "Roles utilisateurs",
+    title: "Navigation",
     items: [
       { id: "superAdmin", label: "Super-admin", icon: NAV_ICONS.superAdmin },
       { id: "establishments", label: "Etablissements", icon: NAV_ICONS.establishments },
       { id: "admin", label: "Mon etablissement", icon: NAV_ICONS.admin },
       { id: "responsable", label: "Responsable magasin", icon: NAV_ICONS.responsable },
       { id: "agent", label: "Agent d'entretien", icon: NAV_ICONS.agent },
-    ],
-  },
-  {
-    title: "Operations metier",
-    items: [
       { id: "products", label: "Produits", icon: NAV_ICONS.products },
-      { id: "movements", label: "Mouvements", icon: NAV_ICONS.movements },
-      { id: "internalOrders", label: "Commandes internes", icon: NAV_ICONS.internalOrders },
+      { id: "movements", label: "Historique / Mouvements", icon: NAV_ICONS.movements },
       { id: "supplierOrders", label: "Commandes fournisseurs", icon: NAV_ICONS.supplierOrders },
       { id: "users", label: "Utilisateurs", icon: NAV_ICONS.users },
       { id: "stats", label: "Statistiques", icon: NAV_ICONS.stats },
@@ -94,7 +85,6 @@ const sectionComponents: Record<SectionId, React.ComponentType> = {
   agent: AgentSection,
   products: ProductsSection,
   movements: MovementsSection,
-  internalOrders: InternalOrdersSection,
   supplierOrders: SupplierOrdersSection,
   users: UsersSection,
   stats: StatsSection,
@@ -110,36 +100,17 @@ function isRoleSelection(value: string | null): value is RoleSelection {
 }
 
 const ROLE_SECTIONS: Record<RoleSelection, SectionId[]> = {
-  superAdmin: ["superAdmin", "establishments", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
-  admin: ["establishments", "products", "movements", "internalOrders", "supplierOrders", "users", "stats"],
-  responsable: ["responsable", "products", "movements", "internalOrders", "stats"],
-  agent: ["agent", "internalOrders"],
+  superAdmin: ["superAdmin", "establishments", "products", "movements", "supplierOrders", "users", "stats"],
+  admin: ["establishments", "products", "movements", "supplierOrders", "users", "stats"],
+  responsable: ["responsable", "products", "movements", "stats"],
+  agent: ["agent"],
 };
 
 export default function HomePage() {
-  const initialSession = useMemo(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
-    const storedRole = sessionStorage.getItem(ROLE_STORAGE_KEY);
-    const initialHash = window.location.hash.replace("#", "");
-    return {
-      storedToken,
-      storedRole: isRoleSelection(storedRole) ? storedRole : null,
-      initialHash: isSectionId(initialHash) ? initialHash : null,
-    };
-  }, []);
-
-  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(initialSession?.storedToken && initialSession?.storedRole));
-  const [currentRole, setCurrentRole] = useState<RoleSelection | null>(() => initialSession?.storedRole ?? null);
-  const [activeSection, setActiveSection] = useState<SectionId>(() => {
-    if (initialSession?.storedToken && initialSession?.storedRole) {
-      const allowed = ROLE_SECTIONS[initialSession.storedRole] ?? ["auth"];
-      return allowed[0];
-    }
-    return initialSession?.initialHash ?? "auth";
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentRole, setCurrentRole] = useState<RoleSelection | null>(null);
+  const [activeSection, setActiveSection] = useState<SectionId>("auth");
+  const [hydrated, setHydrated] = useState(false);
 
   const sectionsToDisplay = useMemo(() => {
     if (isAuthenticated && currentRole) {
@@ -149,10 +120,23 @@ export default function HomePage() {
   }, [isAuthenticated, currentRole]);
 
   useEffect(() => {
-    if (initialSession?.storedToken) {
-      setAccessToken(initialSession.storedToken);
+    if (typeof window === "undefined") {
+      return;
     }
-  }, [initialSession]);
+    const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    const storedRole = sessionStorage.getItem(ROLE_STORAGE_KEY);
+    const initialHash = window.location.hash.replace("#", "");
+    if (storedToken && isRoleSelection(storedRole)) {
+      setAccessToken(storedToken);
+      setIsAuthenticated(true);
+      setCurrentRole(storedRole);
+      const allowedSections = ROLE_SECTIONS[storedRole] ?? ["auth"];
+      setActiveSection(allowedSections[0]);
+    } else if (isSectionId(initialHash)) {
+      setActiveSection(initialHash);
+    }
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
