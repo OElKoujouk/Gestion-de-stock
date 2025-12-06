@@ -196,7 +196,7 @@ export function UsersSection() {
                     </td>
 
                     <td className="py-4 pr-6">
-                      <Badge variant="secondary" className="capitalize">
+                      <Badge variant="neutral" className="capitalize">
                         {user.role}
                       </Badge>
                     </td>
