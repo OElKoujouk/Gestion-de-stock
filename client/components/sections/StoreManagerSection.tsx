@@ -117,7 +117,7 @@ export function StoreManagerSection() {
     setQuantityEdits((prev) => ({ ...prev, [itemId]: value }));
   };
 
-  const handlePrepare = async (demande, statut: "preparee" | "modifiee") => {
+  const handlePrepare = async (demande: Demande, statut: "preparee" | "modifiee") => {
     setSavingId(demande.id);
     setDemandesError(null);
     try {

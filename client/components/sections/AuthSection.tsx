@@ -55,7 +55,6 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
         <CardHeader
           title="Connexion"
           subtitle="Accédez à votre espace sécurisé"
-          className="pb-2"
           action={
             error ? (
               <span className="rounded-lg bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-100">

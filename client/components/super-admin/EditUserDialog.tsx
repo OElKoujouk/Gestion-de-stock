@@ -41,6 +41,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!user) return;
     setError(null);
     setLoading(true);
     try {

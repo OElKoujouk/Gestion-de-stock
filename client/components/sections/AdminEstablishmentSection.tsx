@@ -18,8 +18,8 @@ type Establishment = {
   codePostal: string | null;
   ville: string | null;
 };
-type UserSummary = { id: string; nom: string; email: string; role: string; etablissementId: string | null };
-type ArticleSummary = { id: string; nom: string; uantite: number; referenceFournisseur: string | null; seuilAlerte: number; categorieId?: string | null };
+type UserSummary = { id: string; nom: string; email: string; role: string; etablissementId: string | null; actif: boolean };
+type ArticleSummary = { id: string; nom: string; quantite: number; referenceFournisseur: string | null; seuilAlerte: number; categorieId?: string | null };
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Administrateur",
@@ -145,7 +145,7 @@ export function AdminEstablishmentSection() {
 
   const categoryById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.nom])), [categories]);
 
-  const lowStockArticles = useMemo(() => articles.filter((article) => article.uantite <= article.seuilAlerte), [articles]);
+  const lowStockArticles = useMemo(() => articles.filter((article) => article.quantite <= article.seuilAlerte), [articles]);
 
   const handleCreated = (establishment: Establishment) => {
     setEstablishments((prev) => [establishment, ...prev]);
@@ -457,8 +457,8 @@ export function AdminEstablishmentSection() {
               {lowStockArticles.map((article) => (
                 <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
                   <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
-                  <p className="text-xs text-slate-600">
-                    Stock: <span className="font-semibold text-slate-900">{article.uantite}</span> / seuil{" "}
+                      <p className="text-xs text-slate-600">
+                        Stock: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
                     <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
                   </p>
                   <p className="text-[11px] text-slate-500">Reference: {article.referenceFournisseur ?? "N/A"}</p>
@@ -472,7 +472,7 @@ export function AdminEstablishmentSection() {
       </Card>
 
       <Card>
-        <CardHeader title="Stock de l'etablissement" subtitle="Articles et uantites disponibles" />
+        <CardHeader title="Stock de l'etablissement" subtitle="Articles et quantites disponibles" />
         {selectedEtablissement ? (
           articlesLoading ? (
             <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
@@ -523,13 +523,13 @@ export function AdminEstablishmentSection() {
                       return a.nom.localeCompare(b.nom);
                     })
                     .map((article) => {
-                      const isLow = article.uantite <= article.seuilAlerte;
+                  const isLow = article.quantite <= article.seuilAlerte;
                       return (
                         <tr key={article.id}>
                           <td className="py-3 pr-6 font-semibold text-slate-900">{article.nom}</td>
                           <td className="py-3 pr-6 text-slate-500">{article.referenceFournisseur ?? "—"}</td>
                           <td className="py-3 pr-6">
-                            <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.uantite}</span>
+                        <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.quantite}</span>
                           </td>
                           <td className="py-3">{article.seuilAlerte}</td>
                         </tr>

@@ -45,6 +45,7 @@ export function EditEstablishmentDialog({ open, establishment, onOpenChange, onU
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!establishment) return;
     if (!form.nom.trim()) {
       setError("Le nom est obligatoire");
       return;

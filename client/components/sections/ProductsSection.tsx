@@ -153,7 +153,7 @@ export function ProductsSection() {
         nom: articleForm.nom.trim(),
         categorieId: articleForm.categorieId || null,
         quantite: Number(articleForm.quantite),
-        referenceFournisseur: articleForm.referenceFournisseur.trim() || null,
+        referenceFournisseur: articleForm.referenceFournisseur.trim() || "",
         seuilAlerte: Number(articleForm.seuilAlerte),
         etablissementId: targetTenantId,
       };
