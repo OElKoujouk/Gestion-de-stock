@@ -9,7 +9,6 @@ import { AdminEstablishmentSection } from "@/components/sections/AdminEstablishm
 import { AgentSection } from "@/components/sections/AgentSection";
 import { MovementsSection } from "@/components/sections/MovementsSection";
 import { ProductsSection } from "@/components/sections/ProductsSection";
-import { SuperAdminSection } from "@/components/sections/SuperAdminSection";
 import { StoreManagerSection } from "@/components/sections/StoreManagerSection";
 import { SupplierOrdersSection } from "@/components/sections/SupplierOrdersSection";
 import { UsersSection } from "@/components/sections/UsersSection";
@@ -18,7 +17,6 @@ import { setAccessToken } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const SECTION_ORDER = [
-  "superAdmin",
   "establishments",
   "admin",
   "responsable",
@@ -33,7 +31,6 @@ const SECTION_ORDER = [
 type SectionId = (typeof SECTION_ORDER)[number];
 
 const NAV_ICONS: Record<SectionId, string> = {
-  superAdmin: "🛡️",
   establishments: "🏢",
   admin: "🏠",
   responsable: "🧰",
@@ -49,10 +46,9 @@ const baseNavGroups: NavGroup<SectionId>[] = [
   {
     title: "Navigation",
     items: [
-      { id: "superAdmin", label: "Super-admin", icon: NAV_ICONS.superAdmin },
       { id: "establishments", label: "Etablissements", icon: NAV_ICONS.establishments },
       { id: "admin", label: "Mon etablissement", icon: NAV_ICONS.admin },
-      { id: "responsable", label: "Responsable magasin", icon: NAV_ICONS.responsable },
+      { id: "responsable", label: "Commandes internes", icon: NAV_ICONS.responsable },
       { id: "agent", label: "Agent d'entretien", icon: NAV_ICONS.agent },
       { id: "products", label: "Produits", icon: NAV_ICONS.products },
       { id: "movements", label: "Historique / Mouvements", icon: NAV_ICONS.movements },
@@ -75,7 +71,6 @@ const ROLE_STORAGE_KEY = "gestion-stock:role";
 const USER_NAME_STORAGE_KEY = "gestion-stock:user-name";
 
 const sectionComponents: Record<SectionId, React.ComponentType> = {
-  superAdmin: SuperAdminSection,
   establishments: AdminEstablishmentSection,
   admin: AdminEstablishmentSection,
   responsable: StoreManagerSection,
@@ -96,8 +91,8 @@ function isRoleSelection(value: string | null): value is RoleSelection {
 }
 
 const ROLE_SECTIONS: Record<RoleSelection, SectionId[]> = {
-  superAdmin: ["superAdmin", "establishments", "products", "movements", "supplierOrders", "users"],
-  admin: ["establishments", "products", "movements", "supplierOrders", "users"],
+  superAdmin: ["establishments", "products", "movements", "supplierOrders", "users"],
+  admin: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
   responsable: ["responsable", "products", "movements"],
   agent: ["agent"],
 };
@@ -288,3 +283,7 @@ export default function HomePage() {
     </div>
   );
 }
+
+
+
+

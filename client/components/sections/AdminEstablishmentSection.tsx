@@ -19,7 +19,15 @@ type Establishment = {
   ville: string | null;
 };
 type UserSummary = { id: string; nom: string; email: string; role: string; etablissementId: string | null; actif: boolean };
-type ArticleSummary = { id: string; nom: string; quantite: number; referenceFournisseur: string | null; seuilAlerte: number; categorieId?: string | null };
+type ArticleSummary = {
+  id: string;
+  nom: string;
+  quantite: number;
+  referenceFournisseur: string | null;
+  seuilAlerte: number;
+  categorieId?: string | null;
+  etablissementId: string;
+};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Administrateur",
@@ -55,6 +63,10 @@ export function AdminEstablishmentSection() {
   const [editingEstablishment, setEditingEstablishment] = useState<Establishment | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserTenantId, setCurrentUserTenantId] = useState<string | null>(null);
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState<string | null>(null);
+  const [showAllUsers, setShowAllUsers] = useState(false);
+  const [showAllEstablishments, setShowAllEstablishments] = useState(false);
 
   const fetchEstablishments = useCallback(async () => {
     setLoading(true);
@@ -83,22 +95,27 @@ export function AdminEstablishmentSection() {
     }
   }, []);
 
-  const fetchArticles = useCallback(async (establishmentId: string | null) => {
-    if (!establishmentId) {
-      setArticles([]);
-      return;
-    }
-    setArticlesLoading(true);
-    try {
-      const data = await api.getArticles({ etablissementId: establishmentId });
-      setArticles(data);
-      setArticlesError(null);
-    } catch (err) {
-      setArticlesError(err instanceof Error ? err.message : "Impossible de charger les stocks");
-    } finally {
-      setArticlesLoading(false);
-    }
-  }, []);
+  const fetchArticles = useCallback(
+    async (establishmentId: string | null) => {
+      if (!establishmentId) {
+        setArticles([]);
+        return;
+      }
+      setArticlesLoading(true);
+      try {
+        const params = isSuperAdmin ? undefined : { etablissementId: establishmentId };
+        const allArticles = await api.getArticles(params);
+        const scoped = isSuperAdmin ? allArticles.filter((article) => article.etablissementId === establishmentId) : allArticles;
+        setArticles(scoped);
+        setArticlesError(null);
+      } catch (err) {
+        setArticlesError(err instanceof Error ? err.message : "Impossible de charger les stocks");
+      } finally {
+        setArticlesLoading(false);
+      }
+    },
+    [isSuperAdmin],
+  );
 
   const fetchCategories = useCallback(async (establishmentId: string | null) => {
     if (!establishmentId) {
@@ -122,8 +139,14 @@ export function AdminEstablishmentSection() {
     void fetchUsers();
     api
       .me()
-      .then((data) => setCurrentUserId(data.id))
-      .catch(() => setCurrentUserId(null));
+      .then((data) => {
+        setCurrentUserId(data.id);
+        setCurrentUserTenantId(data.etablissementId ?? null);
+      })
+      .catch(() => {
+        setCurrentUserId(null);
+        setCurrentUserTenantId(null);
+      });
   }, [fetchEstablishments, fetchUsers]);
 
   useEffect(() => {
@@ -131,11 +154,18 @@ export function AdminEstablishmentSection() {
       setSelectedEtablissementId(establishments[0].id);
     }
   }, [establishments, selectedEtablissementId]);
+  useEffect(() => {
+    if (!isSuperAdmin && currentUserTenantId) {
+      setSelectedEtablissementId(currentUserTenantId);
+    }
+  }, [isSuperAdmin, currentUserTenantId]);
 
   useEffect(() => {
     void fetchArticles(selectedEtablissementId);
     void fetchCategories(selectedEtablissementId);
     setSelectedCategoryId("");
+    setSelectedRoleFilter(null);
+    setShowAllUsers(false);
   }, [establishments, fetchArticles, fetchCategories, selectedEtablissementId]);
 
   const filteredArticles = useMemo(() => {
@@ -169,6 +199,35 @@ export function AdminEstablishmentSection() {
     () => (selectedEtablissement ? users.filter((user) => user.etablissementId === selectedEtablissement.id) : []),
     [users, selectedEtablissement],
   );
+  const filteredAssignedUsers = useMemo(() => {
+    let list = assignedUsers;
+    if (selectedRoleFilter) {
+      list = list.filter((user) => user.role === selectedRoleFilter);
+    }
+    return list.filter((user) => user.id !== currentUserId);
+  }, [assignedUsers, currentUserId, selectedRoleFilter]);
+  const VISIBLE_LIMIT = 2;
+  const limitedUsers = showAllUsers ? filteredAssignedUsers : filteredAssignedUsers.slice(0, VISIBLE_LIMIT);
+  const canToggleUserList = filteredAssignedUsers.length > VISIBLE_LIMIT;
+  const ESTABLISHMENTS_VISIBLE_LIMIT = 2;
+  const displayedEstablishments = useMemo(() => {
+    if (showAllEstablishments) {
+      return establishments;
+    }
+    const list = establishments.slice(0, ESTABLISHMENTS_VISIBLE_LIMIT);
+    if (selectedEtablissementId && !list.some((etab) => etab.id === selectedEtablissementId)) {
+      const selected = establishments.find((etab) => etab.id === selectedEtablissementId);
+      if (selected) {
+        if (list.length === ESTABLISHMENTS_VISIBLE_LIMIT) {
+          list[list.length - 1] = selected;
+        } else {
+          list.push(selected);
+        }
+      }
+    }
+    return list;
+  }, [establishments, selectedEtablissementId, showAllEstablishments]);
+  const canToggleEstablishments = establishments.length > ESTABLISHMENTS_VISIBLE_LIMIT;
 
   const roleCounts = assignedUsers.reduce(
     (acc, user) => {
@@ -262,23 +321,26 @@ export function AdminEstablishmentSection() {
             ? "Gerez votre etablissement : utilisateurs rattaches et stock resume."
             : "Creez un etablissement puis selectionnez-le pour consulter les roles attribues, ajouter des comptes et suivre la repartition des droits."
         }
-        actions={
-          !isTenantAdmin ? (
-            <button
-              type="button"
-              onClick={() => setEstablishmentDialogOpen(true)}
-              className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 hover:bg-emerald-600"
-            >
-              Nouvel etablissement
-            </button>
-          ) : null
-        }
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {!isTenantAdmin ? (
           <Card>
-            <CardHeader title="Liste des etablissements" subtitle="Affichage des donnees reelles" />
+            <CardHeader
+              title="Liste des etablissements"
+              subtitle="Affichage des donnees reelles"
+              action={
+                !isTenantAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => setEstablishmentDialogOpen(true)}
+                    className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 hover:bg-emerald-600"
+                  >
+                    Nouvel etablissement
+                  </button>
+                ) : null
+              }
+            />
             {loading ? (
               <p className="text-sm text-slate-500">Chargement...</p>
             ) : error ? (
@@ -296,7 +358,7 @@ export function AdminEstablishmentSection() {
               </div>
             ) : (
               <div className="mt-4 space-y-3 text-sm">
-                {establishments.map((etab) => (
+                {displayedEstablishments.map((etab) => (
                   <div key={etab.id} className="rounded-2xl border border-slate-100">
                     <button
                       type="button"
@@ -321,16 +383,37 @@ export function AdminEstablishmentSection() {
                         Actif
                       </span>
                     </button>
-                    <div className="flex items-center gap-3 border-t border-slate-100 px-4 py-2 text-xs font-semibold">
-                      <button type="button" onClick={() => handleOpenEstablishmentEdit(etab)} className="text-slate-900 underline">
-                        Renommer
-                      </button>
-                      <button type="button" onClick={() => handleDeleteEstablishment(etab)} className="text-rose-600 underline">
-                        Supprimer
-                      </button>
-                    </div>
+                    {showAllEstablishments ? (
+                      <div className="flex items-center gap-3 border-t border-slate-100 px-4 py-2 text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEstablishmentEdit(etab)}
+                          className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-200"
+                        >
+                          Renommer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEstablishment(etab)}
+                          className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
+                {canToggleEstablishments ? (
+                  <div className="text-center text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllEstablishments((prev) => !prev)}
+                      className="font-semibold text-slate-900 underline"
+                    >
+                      {showAllEstablishments ? "Afficher moins" : `Afficher tous (${establishments.length})`}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
           </Card>
@@ -363,12 +446,26 @@ export function AdminEstablishmentSection() {
           {selectedEtablissement ? (
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-3">
-                {roleDisplayOrder.map((roleKey) => (
-                  <div key={roleKey} className="rounded-2xl border border-slate-200 px-4 py-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">{ROLE_LABELS[roleKey]}</p>
-                    <p className="text-2xl font-semibold text-slate-900">{roleCounts[roleKey] ?? 0}</p>
-                  </div>
-                ))}
+                {roleDisplayOrder.map((roleKey) => {
+                  const isSelected = selectedRoleFilter === roleKey;
+                  return (
+                    <button
+                      type="button"
+                      key={roleKey}
+                      onClick={() => {
+                        setSelectedRoleFilter((prev) => (prev === roleKey ? null : roleKey));
+                        setShowAllUsers(false);
+                      }}
+                      className={cn(
+                        "rounded-2xl border px-4 py-3 text-left transition",
+                        isSelected ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200",
+                      )}
+                    >
+                      <p className="text-xs uppercase tracking-wide">{ROLE_LABELS[roleKey]}</p>
+                      <p className="text-2xl font-semibold">{roleCounts[roleKey] ?? 0}</p>
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -391,12 +488,11 @@ export function AdminEstablishmentSection() {
                   <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
                 ) : usersError ? (
                   <p className="px-4 py-3 text-sm text-rose-600">{usersError}</p>
-                ) : assignedUsers.length === 0 ? (
+                ) : filteredAssignedUsers.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-slate-500">Aucun utilisateur affecte a cet etablissement.</p>
                 ) : (
-                  assignedUsers
-                    .filter((user) => user.id !== currentUserId)
-                    .map((user) => {
+                  <>
+                    {limitedUsers.map((user) => {
                       const isSelf = currentUserId === user.id;
                       return (
                         <div key={user.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
@@ -413,7 +509,7 @@ export function AdminEstablishmentSection() {
                                 <button
                                   type="button"
                                   onClick={() => handleOpenEdit(user)}
-                                  className="text-xs font-semibold text-slate-900 underline disabled:opacity-50"
+                                  className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
                                   disabled={isTenantAdmin && user.role === "admin"}
                                 >
                                   Modifier
@@ -421,7 +517,7 @@ export function AdminEstablishmentSection() {
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteUser(user)}
-                                  className="text-xs font-semibold text-rose-600 underline disabled:opacity-50"
+                                  className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
                                   disabled={deletingUserId === user.id || (isTenantAdmin && user.role === "admin")}
                                 >
                                   {deletingUserId === user.id ? "Suppression..." : "Supprimer"}
@@ -433,7 +529,19 @@ export function AdminEstablishmentSection() {
                           </div>
                         </div>
                       );
-                    })
+                    })}
+                    {canToggleUserList ? (
+                      <div className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setShowAllUsers((prev) => !prev)}
+                          className="text-xs font-semibold text-slate-900 underline"
+                        >
+                          {showAllUsers ? "Afficher moins" : `Afficher tous (${filteredAssignedUsers.length})`}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             </div>

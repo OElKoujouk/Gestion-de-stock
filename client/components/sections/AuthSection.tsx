@@ -65,15 +65,15 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
         />
 
         <form className="mt-4 grid gap-5" onSubmit={handleSubmit}>
-          {/* Email */}
+          {/* Identifiant */}
           <label className="text-sm font-medium text-slate-800">
-            Identifiant / email
+            Identifiant
             <input
               type="text"
               value={email}
               autoComplete="username"
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="vous@etablissement.fr"
+              placeholder="Identifiant de connexion"
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
               required
             />

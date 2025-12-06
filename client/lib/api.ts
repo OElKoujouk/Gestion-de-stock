@@ -47,9 +47,17 @@ export const api = {
       searchParams.set("etablissementId", params.etablissementId);
     }
     const query = searchParams.toString();
-    return request<Array<{ id: string; nom: string; quantite: number; referenceFournisseur: string; seuilAlerte: number }>>(
-      `/articles${query ? `?${query}` : ""}`,
-    );
+    return request<
+      Array<{
+        id: string;
+        nom: string;
+        quantite: number;
+        referenceFournisseur: string | null;
+        seuilAlerte: number;
+        categorieId?: string | null;
+        etablissementId: string;
+      }>
+    >(`/articles${query ? `?${query}` : ""}`);
   },
   createArticle: (payload: {
     nom: string;
@@ -120,8 +128,13 @@ export const api = {
     request<void>(`/categories/${id}`, {
       method: "DELETE",
     }),
-  getDemandes: () =>
-    request<
+  getDemandes: (params?: { etablissementId?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.etablissementId) {
+      searchParams.set("etablissementId", params.etablissementId);
+    }
+    const query = searchParams.toString();
+    return request<
       Array<{
         id: string;
         statut: "en_attente" | "preparee" | "modifiee" | "refusee";
@@ -130,7 +143,8 @@ export const api = {
         createdAt?: string;
         updatedAt?: string;
       }>
-    >("/demandes"),
+    >(`/demandes${query ? `?${query}` : ""}`);
+  },
   createDemande: (payload: { items: Array<{ articleId: string; quantite: number }> }) =>
     request<{ id: string }>(`/demandes`, {
       method: "POST",

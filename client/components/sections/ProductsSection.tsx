@@ -38,7 +38,10 @@ export function ProductsSection() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState({ categories: true, articles: true });
-  const [errors, setErrors] = useState<{ categories: string | null; articles: string | null }>({ categories: null, articles: null });
+  const [errors, setErrors] = useState<{ categories: string | null; articles: string | null }>({
+    categories: null,
+    articles: null,
+  });
 
   const [categoryName, setCategoryName] = useState("");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -50,10 +53,14 @@ export function ProductsSection() {
   const [articleError, setArticleError] = useState<string | null>(null);
   const [savingArticleId, setSavingArticleId] = useState<string | null>(null);
   const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
+
   const [searchTerm, setSearchTerm] = useState("");
+  const [showOnlyAlerts, setShowOnlyAlerts] = useState(false);
 
   const targetTenantId = isSuperAdmin ? selectedTenantId || "" : undefined;
   const readyToManage = canManage && (!isSuperAdmin || Boolean(targetTenantId));
+
+  /* ───────────────────── Établissements ───────────────────── */
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -63,6 +70,7 @@ export function ProductsSection() {
       setEstablishmentsError(null);
       return;
     }
+
     setEstablishmentsLoading(true);
     api
       .getEstablishments()
@@ -70,11 +78,19 @@ export function ProductsSection() {
         const options = data.map((item) => ({ id: item.id, nom: item.nom }));
         setEstablishments(options);
         setEstablishmentsError(null);
-        setSelectedTenantId((prev) => (prev && options.some((opt) => opt.id === prev) ? prev : options[0]?.id ?? ""));
+        setSelectedTenantId((prev) =>
+          prev && options.some((opt) => opt.id === prev) ? prev : options[0]?.id ?? "",
+        );
       })
-      .catch((err) => setEstablishmentsError(err instanceof Error ? err.message : "Impossible de charger les établissements"))
+      .catch((err) =>
+        setEstablishmentsError(
+          err instanceof Error ? err.message : "Impossible de charger les établissements",
+        ),
+      )
       .finally(() => setEstablishmentsLoading(false));
   }, [isSuperAdmin]);
+
+  /* ───────────────────── Fetch catégories & articles ───────────────────── */
 
   const fetchCategories = async (tenantId?: string) => {
     setLoading((prev) => ({ ...prev, categories: true }));
@@ -83,7 +99,11 @@ export function ProductsSection() {
       setCategories(data);
       setErrors((prev) => ({ ...prev, categories: null }));
     } catch (err) {
-      setErrors((prev) => ({ ...prev, categories: err instanceof Error ? err.message : "Impossible de charger les catégories" }));
+      setErrors((prev) => ({
+        ...prev,
+        categories:
+          err instanceof Error ? err.message : "Impossible de charger les catégories",
+      }));
     } finally {
       setLoading((prev) => ({ ...prev, categories: false }));
     }
@@ -98,7 +118,10 @@ export function ProductsSection() {
       setArticles(data);
       setErrors((prev) => ({ ...prev, articles: null }));
     } catch (err) {
-      setErrors((prev) => ({ ...prev, articles: err instanceof Error ? err.message : "Impossible de charger les produits" }));
+      setErrors((prev) => ({
+        ...prev,
+        articles: err instanceof Error ? err.message : "Impossible de charger les produits",
+      }));
     } finally {
       setLoading((prev) => ({ ...prev, articles: false }));
     }
@@ -113,6 +136,8 @@ export function ProductsSection() {
     void fetchArticles(targetTenantId);
   }, [readyToManage, targetTenantId]);
 
+  /* ───────────────────── Création / édition catégories ───────────────────── */
+
   const handleCreateCategory = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSuperAdmin && !targetTenantId) {
@@ -126,15 +151,22 @@ export function ProductsSection() {
     setCategoryError(null);
     setCategorySubmitting(true);
     try {
-      const category = await api.createCategory({ nom: categoryName.trim(), etablissementId: targetTenantId });
+      const category = await api.createCategory({
+        nom: categoryName.trim(),
+        etablissementId: targetTenantId,
+      });
       setCategories((prev) => [category, ...prev]);
       setCategoryName("");
     } catch (err) {
-      setCategoryError(err instanceof Error ? err.message : "Impossible de créer la catégorie");
+      setCategoryError(
+        err instanceof Error ? err.message : "Impossible de créer la catégorie",
+      );
     } finally {
       setCategorySubmitting(false);
     }
   };
+
+  /* ───────────────────── Création / édition articles ───────────────────── */
 
   const handleCreateArticle = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -161,7 +193,9 @@ export function ProductsSection() {
       setArticles((prev) => [article, ...prev]);
       setArticleForm(initialArticleForm);
     } catch (err) {
-      setArticleError(err instanceof Error ? err.message : "Impossible de créer le produit");
+      setArticleError(
+        err instanceof Error ? err.message : "Impossible de créer le produit",
+      );
     } finally {
       setArticleSubmitting(false);
     }
@@ -179,16 +213,21 @@ export function ProductsSection() {
       }> = {};
 
       if (patch.nom !== undefined) payload.nom = patch.nom;
-      if (patch.referenceFournisseur !== undefined) payload.referenceFournisseur = patch.referenceFournisseur ?? null;
+      if (patch.referenceFournisseur !== undefined)
+        payload.referenceFournisseur = patch.referenceFournisseur ?? null;
       if (patch.quantite !== undefined) payload.quantite = patch.quantite;
       if (patch.seuilAlerte !== undefined) payload.seuilAlerte = patch.seuilAlerte;
       if (patch.categorieId !== undefined) payload.categorieId = patch.categorieId ?? null;
 
       const updated = await api.updateArticle(articleId, payload);
-      setArticles((prev) => prev.map((item) => (item.id === articleId ? { ...item, ...updated } : item)));
+      setArticles((prev) =>
+        prev.map((item) => (item.id === articleId ? { ...item, ...updated } : item)),
+      );
       setArticleError(null);
     } catch (err) {
-      setArticleError(err instanceof Error ? err.message : "Impossible de mettre à jour le produit");
+      setArticleError(
+        err instanceof Error ? err.message : "Impossible de mettre à jour le produit",
+      );
     } finally {
       setSavingArticleId(null);
     }
@@ -201,36 +240,54 @@ export function ProductsSection() {
       await api.deleteArticle(articleId);
       setArticles((prev) => prev.filter((a) => a.id !== articleId));
     } catch (err) {
-      setArticleError(err instanceof Error ? err.message : "Impossible de supprimer le produit");
+      setArticleError(
+        err instanceof Error ? err.message : "Impossible de supprimer le produit",
+      );
     } finally {
       setDeletingArticleId(null);
     }
   };
 
+  /* ───────────────────── Vue / filtres produits ───────────────────── */
+
   const visibleArticles = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return articles;
-    return articles.filter(
-      (article) =>
-        article.nom.toLowerCase().includes(query) ||
-        (article.referenceFournisseur ?? "").toLowerCase().includes(query),
-    );
-  }, [articles, searchTerm]);
+
+    let list = articles;
+    if (query) {
+      list = list.filter(
+        (article) =>
+          article.nom.toLowerCase().includes(query) ||
+          (article.referenceFournisseur ?? "").toLowerCase().includes(query),
+      );
+    }
+    if (showOnlyAlerts) {
+      list = list.filter((article) => article.quantite <= article.seuilAlerte);
+    }
+    return list;
+  }, [articles, searchTerm, showOnlyAlerts]);
 
   const articlesGroupedByCategory = useMemo(() => {
     const grouped = new Map<string, { id: string; label: string; items: Article[] }>();
+
     visibleArticles.forEach((article) => {
       const catId = article.categorieId ?? "uncategorized";
-      const label = article.categorieId ? categories.find((c) => c.id === catId)?.nom ?? "Catégorie inconnue" : "Sans catégorie";
+      const label = article.categorieId
+        ? categories.find((c) => c.id === catId)?.nom ?? "Catégorie inconnue"
+        : "Sans catégorie";
       if (!grouped.has(catId)) {
         grouped.set(catId, { id: catId, label, items: [] });
       }
       grouped.get(catId)!.items.push(article);
     });
+
     return Array.from(grouped.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [visibleArticles, categories]);
 
-  const alertCount = useMemo(() => articles.filter((article) => article.quantite <= article.seuilAlerte).length, [articles]);
+  const alertCount = useMemo(
+    () => articles.filter((article) => article.quantite <= article.seuilAlerte).length,
+    [articles],
+  );
 
   const stats = [
     { label: "Produits", value: articles.length },
@@ -238,26 +295,38 @@ export function ProductsSection() {
     { label: "Alertes seuil", value: alertCount },
   ];
 
+  /* ───────────────────── Render ───────────────────── */
+
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Gestion des produits"
         title={isSuperAdmin ? "Stock par établissement" : "Stock de l'établissement"}
-        description="Administrateurs, responsables magasin et super-admin structurent le stock : catégories, produits, quantités et seuils d’alerte. Les écrans ci-dessous sont branchés sur l’API réelle."
+        description="Structurez le catalogue : catégories, produits, quantités et seuils d’alerte. Toutes les données sont reliées à l’API en temps réel."
       />
 
+      {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-sm">
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{stat.label}</p>
+          <div
+            key={stat.label}
+            className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-sm"
+          >
+            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
+              {stat.label}
+            </p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">{stat.value}</p>
           </div>
         ))}
       </div>
 
+      {/* Sélection établissement */}
       {isSuperAdmin ? (
         <Card>
-          <CardHeader title="Établissement cible" subtitle="Sélectionnez où créer catégories et produits" />
+          <CardHeader
+            title="Établissement cible"
+            subtitle="Sélectionnez où créer catégories et produits"
+          />
           {establishmentsLoading ? (
             <p className="text-sm text-slate-500">Chargement...</p>
           ) : establishmentsError ? (
@@ -280,8 +349,45 @@ export function ProductsSection() {
         </Card>
       ) : null}
 
+      {/* Filtres produits */}
+      <Card>
+        <CardHeader title="Filtres & recherche" subtitle="Affinez l’affichage du stock" />
+        {readyToManage ? (
+          <div className="flex flex-wrap items-center gap-3 pt-2 text-sm">
+            <input
+              type="search"
+              placeholder="Rechercher un produit ou une référence"
+              className="w-full max-w-xs rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+            <button
+              type="button"
+              className={cn(
+                "rounded-full px-3 py-2 text-xs font-semibold",
+                showOnlyAlerts
+                  ? "bg-amber-500 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-800 hover:bg-slate-200",
+              )}
+              onClick={() => setShowOnlyAlerts((prev) => !prev)}
+            >
+              {showOnlyAlerts ? "Afficher tout le stock" : "Afficher uniquement les alertes"}
+            </button>
+            <span className="text-xs text-slate-500">
+              {visibleArticles.length} produit(s) affiché(s)
+            </span>
+          </div>
+        ) : (
+          <p className="pt-2 text-sm text-slate-500">
+            Sélectionnez un établissement et un rôle autorisé pour gérer le stock.
+          </p>
+        )}
+      </Card>
+
+      {/* Gestion catégories / création produit */}
       {readyToManage ? (
         <div className="grid gap-6 lg:grid-cols-2">
+          {/* Catégories */}
           <Card className="bg-gradient-to-br from-slate-50 to-white">
             <CardHeader title="Catégories" subtitle="Organisez votre catalogue" />
             {loading.categories ? (
@@ -293,7 +399,10 @@ export function ProductsSection() {
             ) : (
               <ul className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                 {categories.map((category) => (
-                  <li key={category.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+                  <li
+                    key={category.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+                  >
                     {editingCategoryId === category.id ? (
                       <form
                         className="flex w-full items-center gap-2"
@@ -306,12 +415,20 @@ export function ProductsSection() {
                           setCategorySubmitting(true);
                           setCategoryError(null);
                           try {
-                            const updated = await api.updateCategory(category.id, { nom: categoryName.trim() });
-                            setCategories((prev) => prev.map((cat) => (cat.id === category.id ? updated : cat)));
+                            const updated = await api.updateCategory(category.id, {
+                              nom: categoryName.trim(),
+                            });
+                            setCategories((prev) =>
+                              prev.map((cat) => (cat.id === category.id ? updated : cat)),
+                            );
                             setEditingCategoryId(null);
                             setCategoryName("");
                           } catch (err) {
-                            setCategoryError(err instanceof Error ? err.message : "Impossible de mettre à jour la catégorie");
+                            setCategoryError(
+                              err instanceof Error
+                                ? err.message
+                                : "Impossible de mettre à jour la catégorie",
+                            );
                           } finally {
                             setCategorySubmitting(false);
                           }
@@ -348,7 +465,7 @@ export function ProductsSection() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            className="text-xs font-semibold text-slate-900 underline"
+                            className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-200"
                             onClick={() => {
                               setEditingCategoryId(category.id);
                               setCategoryName(category.nom);
@@ -359,20 +476,35 @@ export function ProductsSection() {
                           </button>
                           <button
                             type="button"
-                            className="text-xs font-semibold text-rose-600 underline disabled:opacity-50"
+                            className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
                             disabled={categorySubmitting}
                             onClick={async () => {
-                              if (!window.confirm(`Supprimer la catégorie « ${category.nom} » ?`)) return;
+                              if (
+                                !window.confirm(
+                                  `Supprimer la catégorie « ${category.nom} » ?`,
+                                )
+                              )
+                                return;
                               setCategorySubmitting(true);
                               setCategoryError(null);
                               try {
                                 await api.deleteCategory(category.id);
-                                setCategories((prev) => prev.filter((cat) => cat.id !== category.id));
+                                setCategories((prev) =>
+                                  prev.filter((cat) => cat.id !== category.id),
+                                );
                                 setArticles((prev) =>
-                                  prev.map((article) => (article.categorieId === category.id ? { ...article, categorieId: null } : article)),
+                                  prev.map((article) =>
+                                    article.categorieId === category.id
+                                      ? { ...article, categorieId: null }
+                                      : article,
+                                  ),
                                 );
                               } catch (err) {
-                                setCategoryError(err instanceof Error ? err.message : "Impossible de supprimer la catégorie");
+                                setCategoryError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Impossible de supprimer la catégorie",
+                                );
                               } finally {
                                 setCategorySubmitting(false);
                               }
@@ -387,7 +519,10 @@ export function ProductsSection() {
                 ))}
               </ul>
             )}
-            <form className="mt-6 space-y-3 rounded-2xl border border-slate-100 bg-white/70 p-4 shadow-sm" onSubmit={handleCreateCategory}>
+            <form
+              className="mt-6 space-y-3 rounded-2xl border border-slate-100 bg-white/70 p-4 shadow-sm"
+              onSubmit={handleCreateCategory}
+            >
               <label className="text-sm font-medium text-slate-700">
                 Nouvelle catégorie
                 <div className="mt-1 flex gap-3">
@@ -407,11 +542,16 @@ export function ProductsSection() {
                   </button>
                 </div>
               </label>
-              {categoryError ? <p className="text-sm text-rose-600">{categoryError}</p> : null}
-              <p className="text-xs text-slate-500">Ajoutez des catégories pour mieux structurer le catalogue.</p>
+              {categoryError ? (
+                <p className="text-sm text-rose-600">{categoryError}</p>
+              ) : null}
+              <p className="text-xs text-slate-500">
+                Ajoutez des catégories pour mieux structurer le catalogue.
+              </p>
             </form>
           </Card>
 
+          {/* Création produit */}
           <Card className="bg-gradient-to-br from-white to-slate-50">
             <CardHeader title="Créer un produit" subtitle="Réservé à l’établissement sélectionné" />
             <form className="space-y-4" onSubmit={handleCreateArticle}>
@@ -421,7 +561,9 @@ export function ProductsSection() {
                   <input
                     type="text"
                     value={articleForm.nom}
-                    onChange={(event) => setArticleForm((prev) => ({ ...prev, nom: event.target.value }))}
+                    onChange={(event) =>
+                      setArticleForm((prev) => ({ ...prev, nom: event.target.value }))
+                    }
                     className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                     required
                   />
@@ -430,7 +572,9 @@ export function ProductsSection() {
                   Catégorie
                   <select
                     value={articleForm.categorieId}
-                    onChange={(event) => setArticleForm((prev) => ({ ...prev, categorieId: event.target.value }))}
+                    onChange={(event) =>
+                      setArticleForm((prev) => ({ ...prev, categorieId: event.target.value }))
+                    }
                     className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                   >
                     <option value="">Aucune</option>
@@ -448,7 +592,12 @@ export function ProductsSection() {
                       type="number"
                       min={0}
                       value={articleForm.quantite}
-                      onChange={(event) => setArticleForm((prev) => ({ ...prev, quantite: Number(event.target.value) }))}
+                      onChange={(event) =>
+                        setArticleForm((prev) => ({
+                          ...prev,
+                          quantite: Number(event.target.value),
+                        }))
+                      }
                       className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                       required
                     />
@@ -459,7 +608,12 @@ export function ProductsSection() {
                       type="number"
                       min={0}
                       value={articleForm.seuilAlerte}
-                      onChange={(event) => setArticleForm((prev) => ({ ...prev, seuilAlerte: Number(event.target.value) }))}
+                      onChange={(event) =>
+                        setArticleForm((prev) => ({
+                          ...prev,
+                          seuilAlerte: Number(event.target.value),
+                        }))
+                      }
                       className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                       required
                     />
@@ -470,7 +624,12 @@ export function ProductsSection() {
                   <input
                     type="text"
                     value={articleForm.referenceFournisseur}
-                    onChange={(event) => setArticleForm((prev) => ({ ...prev, referenceFournisseur: event.target.value }))}
+                    onChange={(event) =>
+                      setArticleForm((prev) => ({
+                        ...prev,
+                        referenceFournisseur: event.target.value,
+                      }))
+                    }
                     className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
                   />
                 </label>
@@ -493,27 +652,24 @@ export function ProductsSection() {
         <Card>
           <CardHeader title="Gestion restreinte" subtitle="Connectez-vous avec un rôle autorisé" />
           <p className="text-sm text-slate-600">
-            {isSuperAdmin ? "Sélectionnez un établissement pour commencer." : "Seuls les administrateurs, responsables ou super-admin peuvent créer des produits."}
+            {isSuperAdmin
+              ? "Sélectionnez un établissement pour commencer."
+              : "Seuls les administrateurs, responsables ou super-admin peuvent créer des produits."}
           </p>
         </Card>
       )}
 
+      {/* Stock regroupé par catégorie */}
       <Card>
         <CardHeader
           title="Stock"
           subtitle="Tous les produits regroupés par catégorie"
           action={
             readyToManage ? (
-              <div className="flex flex-wrap gap-3 text-sm">
-                <input
-                  type="search"
-                  placeholder="Rechercher un produit ou une référence"
-                  className="w-64 rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                />
-              </div>
-            ) : null
+              <span className="rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold text-slate-700">
+                {visibleArticles.length} produit(s) – {alertCount} alerte(s)
+              </span>
+            ) : undefined
           }
         />
         {loading.articles ? (
@@ -524,113 +680,207 @@ export function ProductsSection() {
           <p className="text-sm text-slate-500">Aucun article pour le moment.</p>
         ) : (
           <div className="mt-4 space-y-4 text-sm">
-            {articlesGroupedByCategory.map((group) => (
-              <div key={group.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Catégorie</p>
-                    <p className="text-lg font-semibold text-slate-900">{group.label}</p>
+            {articlesGroupedByCategory.map((group) => {
+              const groupAlert = group.items.some(
+                (article) => article.quantite <= article.seuilAlerte,
+              );
+              return (
+                <div
+                  key={group.id}
+                  className={cn(
+                    "overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm",
+                    groupAlert && "border-amber-300",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.25em] text-slate-500">
+                        Catégorie
+                      </p>
+                      <p className="text-lg font-semibold text-slate-900">{group.label}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        {group.items.length} article
+                        {group.items.length > 1 ? "s" : ""}
+                      </span>
+                      {groupAlert ? (
+                        <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                          Alerte sur cette catégorie
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                    {group.items.length} article{group.items.length > 1 ? "s" : ""}
-                  </span>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  <div className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    <span className="col-span-4 sm:col-span-4">Nom</span>
-                    <span className="col-span-3 sm:col-span-3">Référence</span>
-                    <span className="col-span-2 sm:col-span-2 text-center">Quantité</span>
-                    <span className="col-span-2 sm:col-span-2 text-center">Seuil</span>
-                    {readyToManage ? <span className="col-span-1 text-right">Actions</span> : null}
+
+                  <div className="divide-y divide-slate-100">
+                    {/* En-tête colonnes */}
+                    <div className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      <span className="col-span-4 sm:col-span-4">Nom</span>
+                      <span className="col-span-3 sm:col-span-3">Référence</span>
+                      <span className="col-span-2 sm:col-span-2 text-center">Quantité</span>
+                      <span className="col-span-2 sm:col-span-2 text-center">Seuil</span>
+                      {readyToManage ? <span className="col-span-1 text-right">Actions</span> : null}
+                    </div>
+
+                    {/* Lignes produits */}
+                    {group.items
+                      .slice()
+                      .sort((a, b) => a.nom.localeCompare(b.nom))
+                      .map((article) => {
+                        const inAlert = article.quantite <= article.seuilAlerte;
+                        const disableEdit =
+                          !readyToManage ||
+                          savingArticleId === article.id ||
+                          deletingArticleId === article.id;
+
+                        return (
+                          <div
+                            key={article.id}
+                            className={cn(
+                              "grid grid-cols-12 items-center gap-3 px-4 py-3 sm:py-2",
+                              inAlert && "bg-amber-50/60",
+                            )}
+                          >
+                            {/* Nom */}
+                            <div className="col-span-4 sm:col-span-4">
+                              <input
+                                className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
+                                value={article.nom}
+                                disabled={disableEdit}
+                                onChange={(event) =>
+                                  setArticles((prev) =>
+                                    prev.map((item) =>
+                                      item.id === article.id
+                                        ? { ...item, nom: event.target.value }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                onBlur={(event) =>
+                                  updateArticleField(article.id, {
+                                    nom: event.target.value.trim(),
+                                  })
+                                }
+                              />
+                            </div>
+
+                            {/* Référence */}
+                            <div className="col-span-3 sm:col-span-3">
+                              <input
+                                className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
+                                value={article.referenceFournisseur ?? ""}
+                                disabled={disableEdit}
+                                onChange={(event) =>
+                                  setArticles((prev) =>
+                                    prev.map((item) =>
+                                      item.id === article.id
+                                        ? {
+                                            ...item,
+                                            referenceFournisseur: event.target.value,
+                                          }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                onBlur={(event) =>
+                                  updateArticleField(article.id, {
+                                    referenceFournisseur:
+                                      event.target.value.trim() || null,
+                                  })
+                                }
+                              />
+                            </div>
+
+                            {/* Quantité */}
+                            <div className="col-span-2 sm:col-span-2">
+                              <input
+                                type="number"
+                                min={0}
+                                className={cn(
+                                  "w-full rounded-full border border-slate-200 px-3 py-1 text-sm text-center focus:border-emerald-500/70 focus:outline-none",
+                                  inAlert ? "text-rose-600" : "text-slate-900",
+                                )}
+                                value={article.quantite}
+                                disabled={disableEdit}
+                                onChange={(event) =>
+                                  setArticles((prev) =>
+                                    prev.map((item) =>
+                                      item.id === article.id
+                                        ? {
+                                            ...item,
+                                            quantite: Number(event.target.value),
+                                          }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                onBlur={(event) =>
+                                  updateArticleField(article.id, {
+                                    quantite: Number(event.target.value),
+                                  })
+                                }
+                              />
+                            </div>
+
+                            {/* Seuil */}
+                            <div className="col-span-2 sm:col-span-2">
+                              <input
+                                type="number"
+                                min={0}
+                                className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm text-center focus:border-emerald-500/70 focus:outline-none"
+                                value={article.seuilAlerte}
+                                disabled={disableEdit}
+                                onChange={(event) =>
+                                  setArticles((prev) =>
+                                    prev.map((item) =>
+                                      item.id === article.id
+                                        ? {
+                                            ...item,
+                                            seuilAlerte: Number(event.target.value),
+                                          }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                onBlur={(event) =>
+                                  updateArticleField(article.id, {
+                                    seuilAlerte: Number(event.target.value),
+                                  })
+                                }
+                              />
+                            </div>
+
+                            {/* Actions */}
+                            {readyToManage ? (
+                              <div className="col-span-12 flex justify-end sm:col-span-1 sm:block">
+                                <button
+                                  type="button"
+                                  className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
+                                  disabled={deletingArticleId === article.id}
+                                  onClick={() =>
+                                    handleDeleteArticle(article.id, article.nom)
+                                  }
+                                >
+                                  {deletingArticleId === article.id
+                                    ? "Suppression..."
+                                    : "Supprimer"}
+                                </button>
+                              </div>
+                            ) : null}
+
+                            {/* Bandeau alerte */}
+                            {inAlert ? (
+                              <div className="col-span-12 mt-1 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
+                                Niveau d’alerte atteint (quantité ≤ seuil)
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                   </div>
-                  {group.items
-                    .slice()
-                    .sort((a, b) => a.nom.localeCompare(b.nom))
-                    .map((article) => {
-                      const inAlert = article.quantite <= article.seuilAlerte;
-                      const disableEdit = !readyToManage || savingArticleId === article.id || deletingArticleId === article.id;
-                      return (
-                        <div key={article.id} className="grid grid-cols-12 items-center gap-3 px-4 py-3 sm:py-2">
-                          <div className="col-span-4 sm:col-span-4">
-                            <input
-                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
-                              value={article.nom}
-                              disabled={disableEdit}
-                              onChange={(event) =>
-                                setArticles((prev) => prev.map((item) => (item.id === article.id ? { ...item, nom: event.target.value } : item)))
-                              }
-                              onBlur={(event) => updateArticleField(article.id, { nom: event.target.value.trim() })}
-                            />
-                          </div>
-                          <div className="col-span-3 sm:col-span-3">
-                            <input
-                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
-                              value={article.referenceFournisseur ?? ""}
-                              disabled={disableEdit}
-                              onChange={(event) =>
-                                setArticles((prev) =>
-                                  prev.map((item) => (item.id === article.id ? { ...item, referenceFournisseur: event.target.value } : item)),
-                                )
-                              }
-                              onBlur={(event) => updateArticleField(article.id, { referenceFournisseur: event.target.value.trim() || null })}
-                            />
-                          </div>
-                          <div className="col-span-2 sm:col-span-2">
-                            <input
-                              type="number"
-                              min={0}
-                              className={cn(
-                                "w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none",
-                                inAlert ? "text-rose-600" : "text-slate-900",
-                              )}
-                              value={article.quantite}
-                              disabled={disableEdit}
-                              onChange={(event) =>
-                                setArticles((prev) =>
-                                  prev.map((item) => (item.id === article.id ? { ...item, quantite: Number(event.target.value) } : item)),
-                                )
-                              }
-                              onBlur={(event) => updateArticleField(article.id, { quantite: Number(event.target.value) })}
-                            />
-                          </div>
-                          <div className="col-span-2 sm:col-span-2">
-                            <input
-                              type="number"
-                              min={0}
-                              className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
-                              value={article.seuilAlerte}
-                              disabled={disableEdit}
-                              onChange={(event) =>
-                                setArticles((prev) =>
-                                  prev.map((item) => (item.id === article.id ? { ...item, seuilAlerte: Number(event.target.value) } : item)),
-                                )
-                              }
-                              onBlur={(event) => updateArticleField(article.id, { seuilAlerte: Number(event.target.value) })}
-                            />
-                          </div>
-                          {readyToManage ? (
-                            <div className="col-span-1 text-right">
-                              <button
-                                type="button"
-                                className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
-                                disabled={deletingArticleId === article.id}
-                                onClick={() => handleDeleteArticle(article.id, article.nom)}
-                              >
-                                {deletingArticleId === article.id ? "Suppression..." : "Supprimer"}
-                              </button>
-                            </div>
-                          ) : null}
-                          {inAlert ? (
-                            <div className="col-span-12 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
-                              Niveau d’alerte atteint (quantité ≤ seuil)
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>

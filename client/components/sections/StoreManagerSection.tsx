@@ -102,14 +102,16 @@ export function StoreManagerSection() {
     fetchDemandes();
   }, []);
 
+  const activeDemandes = useMemo(() => demandes.filter((demande) => demande.statut === "en_attente" || demande.statut === "modifiee"), [demandes]);
+
   const demandesSorted = useMemo(
     () =>
-      [...demandes].sort((a, b) => {
+      [...activeDemandes].sort((a, b) => {
         const aDate = a.updatedAt ?? a.createdAt ?? "";
         const bDate = b.updatedAt ?? b.createdAt ?? "";
         return bDate.localeCompare(aDate);
       }),
-    [demandes],
+    [activeDemandes],
   );
 
   const handleQuantityChange = (itemId: string, value: number) => {
@@ -252,7 +254,7 @@ export function StoreManagerSection() {
           ) : demandesError ? (
             <p className="text-sm text-rose-600">{demandesError}</p>
           ) : demandesSorted.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucune demande à afficher.</p>
+            <p className="text-sm text-slate-500">Aucune demande en cours.</p>
           ) : (
             demandesSorted.map((demande: Demande) => {
               const isEditable = demande.statut === "en_attente" || demande.statut === "modifiee";

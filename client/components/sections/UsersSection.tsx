@@ -10,27 +10,32 @@ import { api } from "@/lib/api";
 
 export function UsersSection() {
   const { role } = useAuth();
-  const [users, setUsers] = useState<Array<{ id: string; nom: string; email: string; role: string; actif: boolean; etablissementId: string | null }>>([]);
+
+  const isSuperAdmin = role === "superAdmin";
+  const canManageUsers = role === "superAdmin" || role === "admin";
+
+  const [users, setUsers] = useState<
+    Array<{ id: string; nom: string; email: string; role: string; actif: boolean; etablissementId: string | null }>
+  >([]);
+  const [establishments, setEstablishments] = useState<Array<{ id: string; nom: string }>>([]);
+  const [establishmentNames, setEstablishmentNames] = useState<Record<string, string>>({});
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [establishments, setEstablishments] = useState<Array<{ id: string; nom: string }>>([]);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const [editingUser, setEditingUser] = useState<{
-    id: string;
-    nom: string;
-    email: string;
-    role: string;
-    actif: boolean;
-    etablissementId: string | null;
-  } | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ id: string; nom: string; role: string; etablissementId: string | null } | null>(null);
-  const [establishmentNames, setEstablishmentNames] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState("");
 
-  const canManageUsers = role === "superAdmin" || role === "admin";
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<(typeof users)[number] | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [selectedTenantId, setSelectedTenantId] = useState("");
+
+  const tenantFilter = isSuperAdmin ? selectedTenantId : undefined;
   const columnCount = canManageUsers ? 5 : 4;
+
+  /* ───────────── Fetch ───────────── */
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -49,79 +54,72 @@ export function UsersSection() {
     void fetchUsers();
     api
       .me()
-      .then((data) => setCurrentUser({ id: data.id, nom: data.nom, role: data.role, etablissementId: data.etablissementId }))
-      .catch(() => setCurrentUser(null));
+      .then((me) => setCurrentUserId(me.id))
+      .catch(() => setCurrentUserId(null));
   }, []);
 
   useEffect(() => {
-    if (role === "superAdmin" || role === "admin") {
-      api
-        .getEstablishments()
-        .then((data) => {
-          setEstablishments(data);
-          setEstablishmentNames(Object.fromEntries(data.map((etab) => [etab.id, etab.nom])));
-        })
-        .catch(() => {
-          setEstablishments([]);
-        });
-    }
-  }, [role]);
+    if (!canManageUsers) return;
 
-  const reloadUsers = () => {
-    void fetchUsers();
-  };
+    api
+      .getEstablishments()
+      .then((data) => {
+        setEstablishments(data);
+        setEstablishmentNames(Object.fromEntries(data.map((e) => [e.id, e.nom])));
+      })
+      .catch(() => {
+        setEstablishments([]);
+        setEstablishmentNames({});
+      });
+  }, [canManageUsers]);
+
+  /* ───────────── Filtering ───────────── */
 
   const filteredUsers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const list = users.filter((user) => user.id !== currentUser?.id);
-    if (!query) return list;
-    return list.filter(
-      (user) =>
-        user.nom.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query) ||
-        user.role.toLowerCase().includes(query),
-    );
-  }, [users, currentUser, search]);
+    const q = search.trim().toLowerCase();
 
-  const handleOpenEdit = (user: (typeof users)[number]) => {
-    setEditingUser(user);
-    setEditDialogOpen(true);
-  };
+    return users
+      .filter((u) => u.id !== currentUserId)
+      .filter((u) => (tenantFilter ? u.etablissementId === tenantFilter : true))
+      .filter((u) => {
+        if (!q) return true;
+        return (
+          u.nom.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.role.toLowerCase().includes(q)
+        );
+      });
+  }, [users, currentUserId, search, tenantFilter]);
 
-  const handleEditOpenChange = (open: boolean) => {
-    setEditDialogOpen(open);
-    if (!open) {
-      setEditingUser(null);
-    }
-  };
+  /* ───────────── Actions ───────────── */
 
   const handleDelete = async (user: (typeof users)[number]) => {
-    if (!window.confirm(`Supprimer l’utilisateur ${user.nom} ?`)) {
-      return;
-    }
+    if (!window.confirm(`Supprimer l’utilisateur ${user.nom} ?`)) return;
+
     setDeletingUserId(user.id);
     try {
       await api.deleteUser(user.id);
       await fetchUsers();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible de supprimer l’utilisateur");
+    } catch {
+      setError("Impossible de supprimer l’utilisateur");
     } finally {
       setDeletingUserId(null);
     }
   };
 
+  /* ───────────── Render ───────────── */
+
   return (
     <div className="space-y-6">
-
       <SectionHeader
         eyebrow="Gestion des utilisateurs"
         title="Rôles & affectations"
-        description="Les administrateurs créent des comptes, définissent les rôles, assignent les établissements et activent ou désactivent les accès."
+        description="Création des comptes, attribution des rôles et rattachement aux établissements."
         actions={
           canManageUsers ? (
             <button
               onClick={() => setDialogOpen(true)}
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-slate-900/10 hover:bg-slate-800"
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
               Créer un utilisateur
             </button>
@@ -129,85 +127,119 @@ export function UsersSection() {
         }
       />
 
+      {/* ───────────── Filtres ───────────── */}
       <Card>
-        <CardHeader
-          title="Utilisateurs"
-          subtitle="Vue rapide des profils"
-          action={
-            canManageUsers ? (
-              <div className="flex flex-wrap gap-3">
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Rechercher par nom, email ou rôle"
-                  className="w-64 rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                />
-              </div>
-            ) : undefined
-          }
-        />
-        <div className="mt-6 overflow-x-auto text-sm">
-          <table className="min-w-full">
+        <CardHeader title="Filtres" />
+        <div className="flex flex-wrap gap-3 pt-2">
+          {isSuperAdmin && (
+            <select
+              value={selectedTenantId}
+              onChange={(e) => setSelectedTenantId(e.target.value)}
+              className="rounded-full border border-slate-200 px-3 py-2 text-sm"
+            >
+              <option value="">Tous les établissements</option>
+              {establishments.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nom}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Nom, email ou rôle…"
+            className="w-64 rounded-full border border-slate-200 px-3 py-2 text-sm"
+          />
+        </div>
+      </Card>
+
+      {/* ───────────── Liste utilisateurs ───────────── */}
+      <Card>
+        <CardHeader title="Utilisateurs" subtitle={`${filteredUsers.length} compte(s)`} />
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="pb-3 pr-6 font-semibold">Nom</th>
-                <th className="pb-3 pr-6 font-semibold">Rôle</th>
-                <th className="pb-3 pr-6 font-semibold">Établissement</th>
-                <th className="pb-3 pr-6 font-semibold">État</th>
-                {canManageUsers ? <th className="pb-3 font-semibold">Actions</th> : null}
+                <th className="pb-3 pr-6">Utilisateur</th>
+                <th className="pb-3 pr-6">Rôle</th>
+                <th className="pb-3 pr-6">Établissement</th>
+                <th className="pb-3 pr-6">État</th>
+                {canManageUsers && <th className="pb-3 text-right">Actions</th>}
               </tr>
             </thead>
+
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={columnCount} className="py-4 text-center text-sm text-slate-500">
-                    Chargement...
-                  </td>
+                  <td colSpan={columnCount} className="py-6 text-center text-slate-500">Chargement…</td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={columnCount} className="py-4 text-center text-sm text-rose-600">
-                    {error}
-                  </td>
+                  <td colSpan={columnCount} className="py-6 text-center text-rose-600">{error}</td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={columnCount} className="py-4 text-center text-sm text-slate-500">
+                  <td colSpan={columnCount} className="py-6 text-center text-slate-500">
                     Aucun utilisateur trouvé.
                   </td>
                 </tr>
               ) : (
                 filteredUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className="py-4 pr-6 font-semibold text-slate-900">{user.nom}</td>
-                    <td className="py-4 pr-6 capitalize">{user.role}</td>
-                    <td className="py-4 pr-6">{user.etablissementId ? establishmentNames[user.etablissementId] ?? user.etablissementId : "Global"}</td>
+                  <tr key={user.id} className="hover:bg-slate-50">
                     <td className="py-4 pr-6">
-                      <Badge variant={user.actif ? "success" : "warning"}>{user.actif ? "Actif" : "Désactivé"}</Badge>
+                      <p className="font-semibold text-slate-900">{user.nom}</p>
+                      <p className="text-xs text-slate-500">{user.email}</p>
                     </td>
-                    {canManageUsers ? (
-                      <td className="py-4">
-                        <div className="flex gap-3">
+
+                    <td className="py-4 pr-6">
+                      <Badge variant="secondary" className="capitalize">
+                        {user.role}
+                      </Badge>
+                    </td>
+
+                    <td className="py-4 pr-6 text-slate-600">
+                      {user.etablissementId
+                        ? establishmentNames[user.etablissementId] ?? "—"
+                        : "Global"}
+                    </td>
+
+                    <td className="py-4 pr-6">
+                      <Badge variant={user.actif ? "success" : "warning"}>
+                        {user.actif ? "Actif" : "Désactivé"}
+                      </Badge>
+                    </td>
+
+                    {canManageUsers && (
+                      <td className="py-4 text-right">
+                        <div className="inline-flex gap-2">
                           <button
-                            type="button"
-                            onClick={() => handleOpenEdit(user)}
-                            className="text-sm font-semibold text-slate-900 underline disabled:opacity-50"
+                            onClick={() => {
+                              setEditingUser(user);
+                              setEditDialogOpen(true);
+                            }}
                             disabled={role === "admin" && user.role === "admin"}
+                            className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold hover:bg-slate-200 disabled:opacity-50"
                           >
                             Modifier
                           </button>
+
                           <button
-                            type="button"
                             onClick={() => handleDelete(user)}
-                            className="text-sm font-semibold text-rose-600 underline disabled:opacity-50"
-                            disabled={deletingUserId === user.id || (role === "admin" && user.role === "admin")}
+                            disabled={
+                              deletingUserId === user.id ||
+                              (role === "admin" && user.role === "admin")
+                            }
+                            className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
                           >
-                            {deletingUserId === user.id ? "Suppression..." : "Supprimer"}
+                            {deletingUserId === user.id ? "…" : "Supprimer"}
                           </button>
                         </div>
                       </td>
-                    ) : null}
+                    )}
                   </tr>
                 ))
               )}
@@ -216,26 +248,27 @@ export function UsersSection() {
         </div>
       </Card>
 
-      {canManageUsers ? (
+      {/* Dialogs */}
+      {canManageUsers && (
         <CreateUserForm
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          onCreated={reloadUsers}
+          onCreated={fetchUsers}
           establishments={establishments}
-          canSelectTenant={role === "superAdmin"}
+          canSelectTenant={isSuperAdmin}
         />
-      ) : null}
+      )}
 
-      {canManageUsers ? (
+      {canManageUsers && (
         <EditUserDialog
           open={editDialogOpen}
           user={editingUser}
-          onOpenChange={handleEditOpenChange}
-          onUpdated={reloadUsers}
+          onOpenChange={setEditDialogOpen}
+          onUpdated={fetchUsers}
           establishments={establishments}
-          canSelectTenant={role === "superAdmin"}
+          canSelectTenant={isSuperAdmin}
         />
-      ) : null}
+      )}
     </div>
   );
 }

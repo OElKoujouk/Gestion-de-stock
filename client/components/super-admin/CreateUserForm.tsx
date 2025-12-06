@@ -90,9 +90,9 @@ export function CreateUserForm({
               />
             </label>
             <label className="text-sm font-semibold text-slate-800">
-              Identifiant / email
+              Identifiant
               <input
-                type="email"
+                type="text"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
