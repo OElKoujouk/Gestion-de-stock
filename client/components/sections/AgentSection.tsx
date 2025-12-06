@@ -448,7 +448,7 @@ export function AgentSection() {
         </Card>
 
         <Card>
-          <CardHeader title="Historique personnel" subtitle="5 dernieres demandes internes" />
+          <CardHeader title="Historique personnel" subtitle="Faits marquants des 5 dernieres demandes" />
           <div className="mt-4 space-y-2">
             {demandesLoading ? (
               <p className="text-sm text-slate-500">Chargement de l&apos;historique...</p>
@@ -456,7 +456,7 @@ export function AgentSection() {
               <p className="text-sm text-rose-600">{demandesError}</p>
             ) : historyDemandes.length === 0 ? (
               <p className="text-sm text-slate-500">Aucune demande enregistree.</p>
-              ) : (
+            ) : (
               historyDemandes.map((demande) => (
                 <div
                   key={demande.id}
@@ -464,16 +464,13 @@ export function AgentSection() {
                 >
                   <div>
                     <p className="font-semibold text-slate-900">{formatDemandeTitle(demande.items)}</p>
-                    <p className="text-xs text-slate-500">Ref {demande.id}</p>
-                  </div>
-                  <div className="flex flex-col items-end text-right">
-                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", statusStyle[demande.statut])}>
-                      {statusLabel[demande.statut]}
-                    </span>
-                    <span className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500">
                       {demande.updatedAt ? dateFormatter.format(new Date(demande.updatedAt)) : "Date inconnue"}
-                    </span>
+                    </p>
                   </div>
+                  <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", statusStyle[demande.statut])}>
+                    {statusLabel[demande.statut]}
+                  </span>
                 </div>
               ))
             )}

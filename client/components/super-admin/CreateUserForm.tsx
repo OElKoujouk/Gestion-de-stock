@@ -74,42 +74,69 @@ export function CreateUserForm({
   const showTenantSelect = !forcedTenantId && canSelectTenant;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
       <div className="w-full max-w-xl">
-        <Card>
+        <Card className="border border-emerald-100/80 bg-gradient-to-br from-white via-emerald-50/50 to-white shadow-xl shadow-emerald-900/5">
           <CardHeader title="Nouvel utilisateur" subtitle="Attribuez un rôle et un établissement" />
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <label className="text-sm font-medium text-slate-700">
+          <form className="mt-3 space-y-4" onSubmit={handleSubmit}>
+            <label className="text-sm font-semibold text-slate-800">
               Nom complet
-              <input type="text" value={form.nom} onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))} className="mt-1" required />
+              <input
+                type="text"
+                value={form.nom}
+                onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
+                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                required
+              />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-semibold text-slate-800">
               Identifiant / email
-              <input type="text" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="mt-1" required />
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                required
+              />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-semibold text-slate-800">
               Mot de passe
-              <input type="password" value={form.motDePasse} onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))} className="mt-1" required />
+              <input
+                type="password"
+                value={form.motDePasse}
+                onChange={(e) => setForm((f) => ({ ...f, motDePasse: e.target.value }))}
+                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                required
+              />
             </label>
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-semibold text-slate-800">
               Rôle
-              <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} className="mt-1">
+              <select
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              >
                 <option value="admin">Administrateur établissement</option>
                 <option value="responsable">Responsable magasin</option>
-                <option value="agent">Agent d’entretien</option>
+                <option value="agent">Agent d'exploitation</option>
               </select>
             </label>
             {forcedTenantId ? (
-              <div className="text-sm font-medium text-slate-700">
+              <div className="text-sm font-semibold text-slate-800">
                 Établissement
                 <p className="mt-1 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-600">
                   {forcedTenantLabel ?? establishments.find((etab) => etab.id === forcedTenantId)?.nom ?? "Aucun (Global)"}
                 </p>
               </div>
             ) : showTenantSelect ? (
-              <label className="text-sm font-medium text-slate-700">
+              <label className="text-sm font-semibold text-slate-800">
                 Établissement
-                <select value={form.etablissementId} onChange={(e) => setForm((f) => ({ ...f, etablissementId: e.target.value }))} className="mt-1" required>
+                <select
+                  value={form.etablissementId}
+                  onChange={(e) => setForm((f) => ({ ...f, etablissementId: e.target.value }))}
+                  className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  required
+                >
                   <option value="">Aucun (Global)</option>
                   {establishments.map((etab) => (
                     <option key={etab.id} value={etab.id}>
@@ -119,12 +146,21 @@ export function CreateUserForm({
                 </select>
               </label>
             ) : null}
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            {error ? (
+              <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-inner">{error}</div>
+            ) : null}
             <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => onOpenChange(false)} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+              >
                 Annuler
               </button>
-              <button type="submit" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+              <button
+                type="submit"
+                className="rounded-full bg-emerald-700 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-700/30 transition hover:-translate-y-0.5 hover:bg-emerald-600 disabled:opacity-60"
+              >
                 {loading ? "Création..." : "Créer"}
               </button>
             </div>

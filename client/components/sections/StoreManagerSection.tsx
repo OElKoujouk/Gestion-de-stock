@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -23,7 +23,7 @@ type Demande = {
   updatedAt?: string;
 };
 
-type ArticleWithStock = { id: string; nom: string; quantite: number };
+type ArticleWithStock = { id: string; nom: string; quantite: number; seuilAlerte: number };
 
 const statusLabel: Record<DemandeStatus, string> = {
   en_attente: "En attente",
@@ -46,6 +46,7 @@ export function StoreManagerSection() {
   const [demandesLoading, setDemandesLoading] = useState(true);
   const [demandesError, setDemandesError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [expandedDemandes, setExpandedDemandes] = useState<Record<string, boolean>>({});
 
   const [articles, setArticles] = useState<ArticleWithStock[]>([]);
   const [quantityEdits, setQuantityEdits] = useState<Record<string, number>>({});
@@ -55,10 +56,11 @@ export function StoreManagerSection() {
       .getArticles()
       .then((data) =>
         setArticles(
-          data.map((item: { id: string; nom: string; quantite: number }) => ({
+          data.map((item: { id: string; nom: string; quantite: number; seuilAlerte: number }) => ({
             id: item.id,
             nom: item.nom,
             quantite: item.quantite,
+            seuilAlerte: item.seuilAlerte,
           })),
         ),
       )
@@ -70,6 +72,12 @@ export function StoreManagerSection() {
     articles.forEach((a) => map.set(a.id, a));
     return map;
   }, [articles]);
+
+  const lowStockArticles = useMemo(
+    () => articles.filter((article) => article.quantite <= article.seuilAlerte),
+    [articles],
+  );
+  const sortedArticles = useMemo(() => [...articles].sort((a, b) => a.nom.localeCompare(b.nom)), [articles]);
 
   const fetchDemandes = () => {
     setDemandesLoading(true);
@@ -154,6 +162,10 @@ export function StoreManagerSection() {
     return `${firstArticle} · ${demande.items.length} ligne${demande.items.length > 1 ? "s" : ""}${date ? ` · ${date}` : ""}`;
   };
 
+  const toggleDemandeDetails = (id: string) => {
+    setExpandedDemandes((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -161,6 +173,76 @@ export function StoreManagerSection() {
         title="Preparer les demandes & gerer le stock"
         description="Consulte les demandes des agents, ajuste les quantites demandees et valide la preparation (avec decrement automatique du stock). Acces aux categories et produits pour maintenir l'inventaire."
       />
+
+      <Card>
+        <CardHeader title="Produits en alerte" subtitle="Quantites au seuil ou en dessous" />
+        {articles.length === 0 ? (
+          <p className="text-sm text-slate-500">Chargement des articles...</p>
+        ) : lowStockArticles.length === 0 ? (
+          <p className="text-sm text-emerald-600">Aucun produit n'est actuellement au seuil.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {lowStockArticles.map((article) => {
+              const deficit = article.seuilAlerte - article.quantite;
+              const ratio = article.seuilAlerte > 0 ? Math.min(article.quantite / article.seuilAlerte, 1) : 1;
+              return (
+                <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-inner shadow-amber-100">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
+                      <p className="text-xs text-slate-600">
+                        Stock actuel: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
+                        <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                      {deficit >= 0 ? `Manque ${deficit}` : "Seuil atteint"}
+                    </span>
+                  </div>
+                  <div className="mt-3 h-2 rounded-full bg-white/70">
+                    <div className="h-full rounded-full bg-amber-400" style={{ width: `${ratio * 100}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader title="Stock de l'etablissement" subtitle="Articles et quantites disponibles" />
+        {articles.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
+        ) : sortedArticles.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-slate-500">Aucun article disponible.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto text-sm">
+            <table className="min-w-full">
+              <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="pb-3 pr-6 font-semibold">Article</th>
+                  <th className="pb-3 pr-6 font-semibold">Quantite</th>
+                  <th className="pb-3 font-semibold">Seuil</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sortedArticles.map((article) => {
+                  const isLow = article.quantite <= article.seuilAlerte;
+                  return (
+                    <tr key={article.id}>
+                      <td className="py-3 pr-6 font-semibold text-slate-900">{article.nom}</td>
+                      <td className="py-3 pr-6">
+                        <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.quantite}</span>
+                      </td>
+                      <td className="py-3">{article.seuilAlerte}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       <Card>
         <CardHeader title="Demandes des agents" subtitle="Preparation et mise a jour des quantites" />
@@ -174,89 +256,96 @@ export function StoreManagerSection() {
           ) : (
             demandesSorted.map((demande: Demande) => {
               const isEditable = demande.statut === "en_attente" || demande.statut === "modifiee";
+              const isExpanded = expandedDemandes[demande.id] ?? false;
               return (
                 <div key={demande.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleDemandeDetails(demande.id)}
+                    className="flex w-full flex-wrap items-start justify-between gap-3 text-left"
+                  >
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{formatItems(demande.items)}</p>
-                      <p className="text-xs text-slate-500">
-                        {demandeLabel(demande)}
-                        {demande.agent ? ` · ${demande.agent.nom}` : ""}
-                      </p>
+                      <p className="text-sm font-semibold text-slate-900">{demande.agent?.nom ?? "Agent inconnu"}</p>
                     </div>
                     <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusStyle[demande.statut])}>
                       {statusLabel[demande.statut]}
                     </span>
-                  </div>
+                  </button>
 
-                  <div className="mt-3 space-y-2">
-                    {demande.items.map((item) => {
-                      const article = articleIndex.get(item.articleId);
-                      const value = quantityEdits[item.id] ?? item.quantitePreparee ?? item.quantiteDemandee;
-                      const stock = article?.quantite ?? 0;
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2"
-                        >
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{article?.nom ?? "Article"}</p>
-                            <p className="text-xs text-slate-500">Demandée: {item.quantiteDemandee}</p>
-                            <p className="text-[11px] text-slate-500">Stock dispo: {stock}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={value}
-                              onChange={(event) => handleQuantityChange(item.id, Number(event.target.value))}
-                              disabled={!isEditable}
-                              className={cn(
-                                "h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100",
-                                !isEditable && "bg-slate-50 text-slate-500",
-                              )}
-                            />
-                            <span className="text-xs text-slate-500">À préparer</span>
-                          </div>
+                  {isExpanded ? (
+                    <>
+                      <div className="mt-3 space-y-2">
+                        {demande.items.map((item) => {
+                          const article = articleIndex.get(item.articleId);
+                          const value = quantityEdits[item.id] ?? item.quantitePreparee ?? item.quantiteDemandee;
+                          const stock = article?.quantite ?? 0;
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2"
+                            >
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{article?.nom ?? "Article"}</p>
+                                <p className="text-xs text-slate-500">Demandee: {item.quantiteDemandee}</p>
+                                <p className="text-[11px] text-slate-500">Stock dispo: {stock}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={value}
+                                  onChange={(event) => handleQuantityChange(item.id, Number(event.target.value))}
+                                  disabled={!isEditable}
+                                  className={cn(
+                                    "h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100",
+                                    !isEditable && "bg-slate-50 text-slate-500",
+                                  )}
+                                />
+                                <span className="text-xs text-slate-500">A preparer</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                        <span className="rounded-full bg-white px-2 py-1">{formatItems(demande.items)}</span>
+                        <span className="rounded-full bg-white px-2 py-1">{demandeLabel(demande)}</span>
+                      </div>
+
+                      {isEditable ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handlePrepare(demande, "preparee")}
+                            disabled={savingId === demande.id}
+                            className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            {savingId === demande.id ? "Validation..." : "Valider"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePrepare(demande, "modifiee")}
+                            disabled={savingId === demande.id}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            {savingId === demande.id ? "Sauvegarde..." : "Enregistrer comme modifiee"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefuse(demande.id)}
+                            disabled={savingId === demande.id}
+                            className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                          >
+                            {savingId === demande.id ? "Refus..." : "Refuser"}
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                    <span className="rounded-full bg-white px-2 py-1">{formatItems(demande.items)}</span>
-                    <span className="rounded-full bg-white px-2 py-1">{demandeLabel(demande)}</span>
-                  </div>
-
-                  {isEditable ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handlePrepare(demande, "preparee")}
-                        disabled={savingId === demande.id}
-                        className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        {savingId === demande.id ? "Validation..." : "Valider"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePrepare(demande, "modifiee")}
-                        disabled={savingId === demande.id}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        {savingId === demande.id ? "Sauvegarde..." : "Enregistrer comme modifiée"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRefuse(demande.id)}
-                        disabled={savingId === demande.id}
-                        className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                      >
-                        {savingId === demande.id ? "Refus..." : "Refuser"}
-                      </button>
-                    </div>
+                      ) : (
+                        <p className="mt-3 text-xs text-slate-500">Demande non editable (statut {statusLabel[demande.statut]}).</p>
+                      )}
+                    </>
                   ) : (
-                    <p className="text-xs text-slate-500">Demande non editable (statut {statusLabel[demande.statut]}).</p>
+                    <p className="mt-3 text-xs text-slate-500">Cliquez pour afficher les details de la demande.</p>
                   )}
                 </div>
               );

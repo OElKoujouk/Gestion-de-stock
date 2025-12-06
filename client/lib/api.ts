@@ -35,7 +35,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: (payload: { email: string; password: string }) =>
-    request<{ token: string; user: { id: string; role: string; etablissement_id: string | null } }>("/auth/login", {
+    request<{ token: string; user: { id: string; role: string; etablissement_id: string | null; nom: string } }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

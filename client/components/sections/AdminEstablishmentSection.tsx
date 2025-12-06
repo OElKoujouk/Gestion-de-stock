@@ -19,7 +19,7 @@ type Establishment = {
   ville: string | null;
 };
 type UserSummary = { id: string; nom: string; email: string; role: string; etablissementId: string | null };
-type ArticleSummary = { id: string; nom: string; quantite: number; referenceFournisseur: string | null; seuilAlerte: number; categorieId?: string | null };
+type ArticleSummary = { id: string; nom: string; uantite: number; referenceFournisseur: string | null; seuilAlerte: number; categorieId?: string | null };
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Administrateur",
@@ -30,6 +30,7 @@ const ROLE_LABELS: Record<string, string> = {
 export function AdminEstablishmentSection() {
   const { role } = useAuth();
   const isTenantAdmin = role === "admin";
+  const isSuperAdmin = role === "superAdmin";
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +145,8 @@ export function AdminEstablishmentSection() {
 
   const categoryById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.nom])), [categories]);
 
+  const lowStockArticles = useMemo(() => articles.filter((article) => article.uantite <= article.seuilAlerte), [articles]);
+
   const handleCreated = (establishment: Establishment) => {
     setEstablishments((prev) => [establishment, ...prev]);
     setSelectedEtablissementId(establishment.id);
@@ -253,7 +256,7 @@ export function AdminEstablishmentSection() {
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Administrateur etablissement"
-        title="Pilotage des etablissements"
+        title={isSuperAdmin ? "Pilotage des etablissements" : "Pilotage de l'etablissement"}
         description={
           isTenantAdmin
             ? "Gerez votre etablissement : utilisateurs rattaches et stock resume."
@@ -341,11 +344,15 @@ export function AdminEstablishmentSection() {
             ) : establishments.length === 0 ? (
               <p className="text-sm text-slate-500">Aucun etablissement pour le moment.</p>
             ) : (
-              <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Etablissement</p>
-                <p className="text-xl font-semibold text-slate-900">{establishments[0].nom}</p>
-                <p className="text-xs text-slate-500">{[establishments[0].codePostal, establishments[0].ville].filter(Boolean).join(" ") || "Localisation non renseignee"}</p>
-                <span className="mt-2 inline-flex rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Actif</span>
+              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white/80 px-4 py-3 shadow-sm">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Etablissement</p>
+                  <p className="text-lg font-semibold text-slate-900">{establishments[0].nom}</p>
+                  <p className="text-xs text-slate-500">
+                    {[establishments[0].codePostal, establishments[0].ville].filter(Boolean).join(" ") || "Localisation non renseignee"}
+                  </p>
+                </div>
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Actif</span>
               </div>
             )}
           </Card>
@@ -437,7 +444,35 @@ export function AdminEstablishmentSection() {
       </div>
 
       <Card>
-        <CardHeader title="Stock de l'etablissement" subtitle="Articles et quantites disponibles" />
+        <CardHeader title="Alertes seuil" subtitle="Articles a reapprovisionner" />
+        {selectedEtablissement ? (
+          articlesLoading ? (
+            <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
+          ) : articlesError ? (
+            <p className="px-4 py-3 text-sm text-rose-600">{articlesError}</p>
+          ) : lowStockArticles.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-emerald-600">Aucun article n'est sous son seuil d'alerte.</p>
+          ) : (
+            <div className="mt-3 grid gap-3 px-4 pb-4 md:grid-cols-2">
+              {lowStockArticles.map((article) => (
+                <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                  <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
+                  <p className="text-xs text-slate-600">
+                    Stock: <span className="font-semibold text-slate-900">{article.uantite}</span> / seuil{" "}
+                    <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500">Reference: {article.referenceFournisseur ?? "N/A"}</p>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <p className="px-4 py-3 text-sm text-slate-500">Selectionnez un etablissement pour voir les alertes.</p>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader title="Stock de l'etablissement" subtitle="Articles et uantites disponibles" />
         {selectedEtablissement ? (
           articlesLoading ? (
             <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
@@ -488,13 +523,13 @@ export function AdminEstablishmentSection() {
                       return a.nom.localeCompare(b.nom);
                     })
                     .map((article) => {
-                      const isLow = article.quantite <= article.seuilAlerte;
+                      const isLow = article.uantite <= article.seuilAlerte;
                       return (
                         <tr key={article.id}>
                           <td className="py-3 pr-6 font-semibold text-slate-900">{article.nom}</td>
                           <td className="py-3 pr-6 text-slate-500">{article.referenceFournisseur ?? "—"}</td>
                           <td className="py-3 pr-6">
-                            <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.quantite}</span>
+                            <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.uantite}</span>
                           </td>
                           <td className="py-3">{article.seuilAlerte}</td>
                         </tr>

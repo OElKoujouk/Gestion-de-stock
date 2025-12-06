@@ -218,12 +218,12 @@ export function ProductsSection() {
   }, [articles, searchTerm]);
 
   const articlesGroupedByCategory = useMemo(() => {
-    const grouped = new Map<string, { label: string; items: Article[] }>();
+    const grouped = new Map<string, { id: string; label: string; items: Article[] }>();
     visibleArticles.forEach((article) => {
       const catId = article.categorieId ?? "uncategorized";
       const label = article.categorieId ? categories.find((c) => c.id === catId)?.nom ?? "Catégorie inconnue" : "Sans catégorie";
       if (!grouped.has(catId)) {
-        grouped.set(catId, { label, items: [] });
+        grouped.set(catId, { id: catId, label, items: [] });
       }
       grouped.get(catId)!.items.push(article);
     });
@@ -242,7 +242,7 @@ export function ProductsSection() {
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Gestion des produits"
-        title="Catalogue par établissement"
+        title={isSuperAdmin ? "Stock par établissement" : "Stock de l'établissement"}
         description="Administrateurs, responsables magasin et super-admin structurent le stock : catégories, produits, quantités et seuils d’alerte. Les écrans ci-dessous sont branchés sur l’API réelle."
       />
 
@@ -390,25 +390,25 @@ export function ProductsSection() {
             <form className="mt-6 space-y-3 rounded-2xl border border-slate-100 bg-white/70 p-4 shadow-sm" onSubmit={handleCreateCategory}>
               <label className="text-sm font-medium text-slate-700">
                 Nouvelle catégorie
-                <input
-                  type="text"
-                  value={categoryName}
-                  onChange={(event) => setCategoryName(event.target.value)}
-                  className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                  placeholder="Ex : Fournitures"
-                />
+                <div className="mt-1 flex gap-3">
+                  <input
+                    type="text"
+                    value={categoryName}
+                    onChange={(event) => setCategoryName(event.target.value)}
+                    className="flex-1 rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                    placeholder="Ex : Fournitures"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+                    disabled={categorySubmitting}
+                  >
+                    {categorySubmitting ? "Ajout..." : "Ajouter"}
+                  </button>
+                </div>
               </label>
               {categoryError ? <p className="text-sm text-rose-600">{categoryError}</p> : null}
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>Ajoutez des catégories pour mieux structurer le catalogue.</span>
-                <button
-                  type="submit"
-                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-                  disabled={categorySubmitting}
-                >
-                  {categorySubmitting ? "Ajout..." : "Ajouter"}
-                </button>
-              </div>
+              <p className="text-xs text-slate-500">Ajoutez des catégories pour mieux structurer le catalogue.</p>
             </form>
           </Card>
 
@@ -500,7 +500,7 @@ export function ProductsSection() {
 
       <Card>
         <CardHeader
-          title="Catalogue"
+          title="Stock"
           subtitle="Tous les produits regroupés par catégorie"
           action={
             readyToManage ? (
@@ -525,7 +525,7 @@ export function ProductsSection() {
         ) : (
           <div className="mt-4 space-y-4 text-sm">
             {articlesGroupedByCategory.map((group) => (
-              <div key={group.label} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              <div key={group.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Catégorie</p>

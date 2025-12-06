@@ -1,4 +1,6 @@
 import { Router } from "express";
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "../prisma";
 import { allowRoles } from "../middleware/role";
 
@@ -30,12 +32,24 @@ demandesRouter.post("/", allowRoles("agent", "responsable", "admin"), async (req
   res.status(201).json(demande);
 });
 
-demandesRouter.get("/", allowRoles("agent", "responsable", "admin"), async (req, res) => {
-  if (!req.tenantId || !req.user) return res.status(400).json({ message: "Tenant requis" });
-  const where = {
-    etablissementId: req.tenantId,
-    ...(req.user.role === "agent" ? { agentId: req.user.id } : {}),
-  };
+demandesRouter.get("/", allowRoles("superadmin", "agent", "responsable", "admin"), async (req, res) => {
+  if (!req.user) return res.status(401).json({ message: "Utilisateur non authentifié" });
+  const where: Prisma.DemandeWhereInput = {};
+
+  if (req.user.role === "superadmin") {
+    if (typeof req.query.etablissementId === "string" && req.query.etablissementId.length > 0) {
+      where.etablissementId = req.query.etablissementId;
+    }
+  } else {
+    if (!req.tenantId) {
+      return res.status(400).json({ message: "Tenant requis" });
+    }
+    where.etablissementId = req.tenantId;
+    if (req.user.role === "agent") {
+      where.agentId = req.user.id;
+    }
+  }
+
   const demandes = await prisma.demande.findMany({
     where,
     include: { items: true, agent: { select: { id: true, nom: true, email: true } } },
@@ -43,7 +57,7 @@ demandesRouter.get("/", allowRoles("agent", "responsable", "admin"), async (req,
   res.json(demandes);
 });
 
-demandesRouter.get("/:id", allowRoles("agent", "responsable", "admin"), async (req, res) => {
+demandesRouter.get("/:id", allowRoles("superadmin", "agent", "responsable", "admin"), async (req, res) => {
   const demande = await prisma.demande.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
     include: { items: true, agent: { select: { id: true, nom: true, email: true } } },

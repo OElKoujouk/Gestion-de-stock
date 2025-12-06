@@ -62,10 +62,32 @@ establishmentsRouter.put("/:id", async (req, res) => {
 });
 
 establishmentsRouter.delete("/:id", async (req, res) => {
+  const { id } = req.params;
   try {
-    await prisma.establishment.delete({ where: { id: req.params.id } });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.establishment.findUnique({ where: { id } });
+      if (!existing) {
+        throw new Error("NOT_FOUND");
+      }
+
+      // Supprimer toutes les données liées avant de supprimer l'établissement.
+      await tx.demandeItem.deleteMany({ where: { demande: { etablissementId: id } } });
+      await tx.demande.deleteMany({ where: { etablissementId: id } });
+      await tx.supplierOrderItem.deleteMany({ where: { commande: { etablissementId: id } } });
+      await tx.supplierOrder.deleteMany({ where: { etablissementId: id } });
+      await tx.movement.deleteMany({ where: { etablissementId: id } });
+      await tx.article.deleteMany({ where: { etablissementId: id } });
+      await tx.category.deleteMany({ where: { etablissementId: id } });
+      await tx.user.deleteMany({ where: { etablissementId: id } });
+
+      await tx.establishment.delete({ where: { id } });
+    });
     res.status(204).send();
-  } catch {
-    res.status(404).json({ message: "Etablissement introuvable" });
+  } catch (error) {
+    if (error instanceof Error && error.message === "NOT_FOUND") {
+      res.status(404).json({ message: "Etablissement introuvable" });
+      return;
+    }
+    res.status(500).json({ message: "Impossible de supprimer l'etablissement" });
   }
 });

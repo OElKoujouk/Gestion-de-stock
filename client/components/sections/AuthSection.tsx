@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 export type RoleSelection = "superAdmin" | "admin" | "responsable" | "agent";
 
 type AuthSectionProps = {
-  onAuthenticated?: (token: string, role: RoleSelection) => void;
+  onAuthenticated?: (token: string, role: RoleSelection, userName: string) => void;
 };
 
 export function AuthSection({ onAuthenticated }: AuthSectionProps) {
@@ -37,7 +37,7 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
         sessionStorage.clear();
       }
 
-      onAuthenticated?.(response.token, role);
+      onAuthenticated?.(response.token, role, response.user.nom);
     } catch (err) {
       setError(
         err instanceof Error
