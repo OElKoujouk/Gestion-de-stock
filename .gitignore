@@ -3,7 +3,9 @@ node_modules/
 
 # Client
 client/node_modules/
+client/.next
+client/.env
 
 # Server
 server/node_modules/
-/generated/prisma
+server/.env

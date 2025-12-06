@@ -39,7 +39,6 @@ model Establishment {
   ville     String?
   users     User[]
   articles  Article[]
-  
   categories Category[]
   mouvements Movement[]
   demandes   Demande[]
