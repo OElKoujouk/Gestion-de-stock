@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+ARG DATABASE_URL="mysql://root:root@db:3306/gestion_stock"
+ENV DATABASE_URL=${DATABASE_URL}
+
 COPY package*.json ./
 RUN npm ci
 

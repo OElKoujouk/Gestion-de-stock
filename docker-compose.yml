@@ -11,12 +11,15 @@ services:
       - "3307:3306"
 
   server:
-    build: ./server
+    build:
+      context: ./server
+      args:
+        DATABASE_URL: ${SERVER_DATABASE_URL:-mysql://root:root@db:3306/gestion_stock}
     restart: unless-stopped
     env_file:
       - ./server/.env
     environment:
-      DATABASE_URL: mysql://root:root@db:3306/gestion_stock
+      DATABASE_URL: ${SERVER_DATABASE_URL:-mysql://root:root@db:3306/gestion_stock}
       PORT: 4000
     depends_on:
       - db
