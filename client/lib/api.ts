@@ -1,6 +1,6 @@
 import type { UserPermissions } from "@/lib/permissions";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 let accessToken: string | null = null;
 
