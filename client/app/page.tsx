@@ -48,7 +48,7 @@ const baseNavGroups: NavGroup<SectionId>[] = [
     items: [
       { id: "establishments", label: "Etablissements", icon: NAV_ICONS.establishments },
       { id: "admin", label: "Mon etablissement", icon: NAV_ICONS.admin },
-      { id: "responsable", label: "Commandes internes", icon: NAV_ICONS.responsable },
+      { id: "responsable", label: "Commandes agent", icon: NAV_ICONS.responsable },
       { id: "agent", label: "Agent d'entretien", icon: NAV_ICONS.agent },
       { id: "products", label: "Produits", icon: NAV_ICONS.products },
       { id: "movements", label: "Historique / Mouvements", icon: NAV_ICONS.movements },
@@ -91,9 +91,9 @@ function isRoleSelection(value: string | null): value is RoleSelection {
 }
 
 const ROLE_SECTIONS: Record<RoleSelection, SectionId[]> = {
-  superAdmin: ["establishments", "products", "movements", "supplierOrders", "users"],
+  superAdmin: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
   admin: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
-  responsable: ["responsable", "products", "movements"],
+  responsable: ["responsable", "supplierOrders", "products", "movements"],
   agent: ["agent"],
 };
 
@@ -253,7 +253,7 @@ export default function HomePage() {
             {isAuthenticated && currentRole ? (
               <div className="flex flex-wrap items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-3 text-sm text-emerald-900 shadow-sm shadow-emerald-150/60">
                 <p>
-                  Connecte en tant que <span className="font-semibold">{roleLabelMap[currentRole]}</span>
+                  Connecte en tant <span className="font-semibold">{roleLabelMap[currentRole]}</span>
                   {currentUserName ? ` · ${currentUserName}` : ""}
                 </p>
                 <button
@@ -283,7 +283,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-
-
-

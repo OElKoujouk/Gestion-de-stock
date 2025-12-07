@@ -26,6 +26,7 @@ type Demande = {
   id: string;
   statut: DemandeStatus;
   items: DemandeItem[];
+  reference?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -36,7 +37,7 @@ const statusLabel: Record<DemandeStatus, string> = {
   en_attente: "En attente",
   preparee: "Prete",
   modifiee: "Modifiee",
-  refusee: "Refusee",
+  refusee: "Annulee",
 };
 
 const statusStyle: Record<DemandeStatus, string> = {
@@ -58,12 +59,16 @@ export function AgentSection() {
   const [demandesLoading, setDemandesLoading] = useState(true);
   const [demandesError, setDemandesError] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [expandedDemandeIds, setExpandedDemandeIds] = useState<Set<string>>(new Set());
+  const [showAllInProgress, setShowAllInProgress] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const [favorites, setFavorites] = useState<string[]>([]);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? window.localStorage.getItem(FAVORITES_STORAGE_KEY) : null;
@@ -80,6 +85,12 @@ export function AgentSection() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
   }, [favorites]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (!isAuthenticated || role !== "agent") return;
@@ -151,20 +162,33 @@ export function AgentSection() {
   );
 
   const historyDemandes = useMemo(() => demandesSorted.slice(0, 5), [demandesSorted]);
+  const visibleInProgress = useMemo(
+    () => (showAllInProgress ? inProgressDemandes : inProgressDemandes.slice(0, 3)),
+    [inProgressDemandes, showAllInProgress],
+  );
+  const visibleHistory = useMemo(
+    () => (showAllHistory ? historyDemandes : historyDemandes.slice(0, 3)),
+    [historyDemandes, showAllHistory],
+  );
 
-  const formatDemandeTitle = (items: DemandeItem[]) => {
-    if (!items.length) return "Demande";
-    return items
-      .map((item) => {
-        const article = articleIndex.get(item.articleId);
-        const quantity = item.quantitePreparee > 0 ? item.quantitePreparee : item.quantiteDemandee;
-        return `${article?.nom ?? "Article"} x${quantity}`;
-      })
-      .join(", ");
-  };
+  const demandeCode = (demande: Demande) => demande.reference ?? `CMD-${demande.id.slice(-6).toUpperCase()}`;
+
+  const formatDemandeRef = (demande: Demande) => demandeCode(demande);
 
   const toggleFavorite = (articleId: string) => {
     setFavorites((prev) => (prev.includes(articleId) ? prev.filter((id) => id !== articleId) : [...prev, articleId]));
+  };
+
+  const toggleDemandeExpansion = (demandeId: string) => {
+    setExpandedDemandeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(demandeId)) {
+        next.delete(demandeId);
+      } else {
+        next.add(demandeId);
+      }
+      return next;
+    });
   };
 
   const updateQuantity = (articleId: string, quantity: number, maxAllowed: number) => {
@@ -195,9 +219,11 @@ export function AgentSection() {
       await api.createDemande({ items: selectedItems.map((item) => ({ articleId: item.articleId, quantite: item.quantity })) });
       setCart({});
       setSubmitSuccess("Demande envoyee au responsable.");
+      setToast({ message: "Demande envoyee", type: "success" });
       fetchDemandes();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Impossible d'envoyer la demande pour le moment.");
+      setToast({ message: "Erreur lors de l'envoi", type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -232,15 +258,15 @@ export function AgentSection() {
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Agent d'entretien"
-        title="Commander des produits en interne"
-        description="Pas de vision de stock global : vous choisissez parmi les articles ouverts a la demande, pouvez les mettre en favoris, envoyer une commande interne et suivre son statut (prete, modifiee, en attente, refusee)."
+        title="Commande produits"
+        description="Articles ouverts, favoris, suivi des statuts (prete, modifiee, attente, refusee)."
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader
             title="Nouvelle demande interne"
-            subtitle="Produits disponibles a la commande (filtre sur votre etablissement)"
+            subtitle="Produits disponibles a la commande"
             action={
               submitError ? (
                 <span className="rounded-lg bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-100">
@@ -413,34 +439,62 @@ export function AgentSection() {
               <p className="text-sm text-slate-500">Aucune demande en cours pour le moment.</p>
               ) : (
               inProgressDemandes.map((demande) => (
-                <div key={demande.id} className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4">
-                  <div className="flex items-start justify-between gap-3">
+                <div key={demande.id} className="rounded-2xl border border-slate-200/70 bg-slate-50/80">
+                  <button
+                    type="button"
+                    onClick={() => toggleDemandeExpansion(demande.id)}
+                    className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left"
+                    aria-expanded={expandedDemandeIds.has(demande.id)}
+                  >
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-slate-900">{formatDemandeTitle(demande.items)}</p>
-                      <p className="text-xs text-slate-500">Ref {demande.id}</p>
+                      <p className="text-sm font-semibold text-slate-900">{formatDemandeRef(demande)}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {demande.updatedAt ? dateFormatter.format(new Date(demande.updatedAt)) : "Date inconnue"}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusStyle[demande.statut])}>
                         {statusLabel[demande.statut]}
                       </span>
-                      {demande.statut === "en_attente" ? (
-                        <button
-                          type="button"
-                          onClick={() => handleCancelDemande(demande.id)}
-                          disabled={cancelingId === demande.id}
-                          className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                        >
-                          {cancelingId === demande.id ? "Annulation..." : "Annuler"}
-                        </button>
-                      ) : null}
+                      <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">
+                        {expandedDemandeIds.has(demande.id) ? "Masquer" : "Voir"}
+                      </span>
                     </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                    <span className="rounded-full bg-white px-2 py-1">
-                      {demande.updatedAt ? dateFormatter.format(new Date(demande.updatedAt)) : "Date inconnue"}
-                    </span>
-                    <span className="rounded-full bg-white px-2 py-1">Ref {demande.id}</span>
-                  </div>
+                  </button>
+
+                  {expandedDemandeIds.has(demande.id) ? (
+                    <div className="space-y-3 border-t border-slate-100 px-4 py-3">
+                      <ul className="list-disc space-y-1 pl-4 text-sm font-semibold text-slate-900">
+                        {demande.items.length === 0 ? (
+                          <li>Demande sans article</li>
+                        ) : (
+                          demande.items.map((item) => {
+                            const article = articleIndex.get(item.articleId);
+                            const quantity = item.quantitePreparee > 0 ? item.quantitePreparee : item.quantiteDemandee;
+                            return <li key={item.id}>{`${article?.nom ?? "Article"} x${quantity}`}</li>;
+                          })
+                        )}
+                      </ul>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                        <span className="rounded-full bg-white px-2 py-1">
+                          {demande.updatedAt ? dateFormatter.format(new Date(demande.updatedAt)) : "Date inconnue"}
+                        </span>
+                        {demande.statut === "en_attente" ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleCancelDemande(demande.id);
+                            }}
+                            disabled={cancelingId === demande.id}
+                            className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                          >
+                            {cancelingId === demande.id ? "Annulation..." : "Annuler"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))
             )}
@@ -460,23 +514,57 @@ export function AgentSection() {
               historyDemandes.map((demande) => (
                 <div
                   key={demande.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                  className="rounded-xl border border-slate-100 bg-slate-50"
                 >
-                  <div>
-                    <p className="font-semibold text-slate-900">{formatDemandeTitle(demande.items)}</p>
-                    <p className="text-xs text-slate-500">
-                      {demande.updatedAt ? dateFormatter.format(new Date(demande.updatedAt)) : "Date inconnue"}
-                    </p>
-                  </div>
-                  <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", statusStyle[demande.statut])}>
-                    {statusLabel[demande.statut]}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleDemandeExpansion(demande.id)}
+                    className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm text-slate-800"
+                    aria-expanded={expandedDemandeIds.has(demande.id)}
+                  >
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">{formatDemandeRef(demande)}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {demande.updatedAt ? dateFormatter.format(new Date(demande.updatedAt)) : "Date inconnue"}
+                      </p>
+                    </div>
+                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", statusStyle[demande.statut])}>
+                      {statusLabel[demande.statut]}
+                    </span>
+                  </button>
+                  {expandedDemandeIds.has(demande.id) ? (
+                    <div className="space-y-2 border-t border-slate-100 px-3 py-2">
+                      <ul className="list-disc space-y-1 pl-4 text-sm font-semibold text-slate-900">
+                        {demande.items.length === 0 ? (
+                          <li>Demande sans article</li>
+                        ) : (
+                          demande.items.map((item) => {
+                            const article = articleIndex.get(item.articleId);
+                            const quantity = item.quantitePreparee > 0 ? item.quantitePreparee : item.quantiteDemandee;
+                            return <li key={item.id}>{`${article?.nom ?? "Article"} x${quantity}`}</li>;
+                          })
+                        )}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               ))
             )}
           </div>
         </Card>
       </div>
+      {toast ? (
+        <div
+          className={cn(
+            "fixed bottom-4 right-4 z-50 max-w-sm rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg",
+            toast.type === "success"
+              ? "bg-emerald-600 text-white shadow-emerald-700/30"
+              : "bg-rose-600 text-white shadow-rose-700/30",
+          )}
+        >
+          {toast.message}
+        </div>
+      ) : null}
     </div>
   );
 }

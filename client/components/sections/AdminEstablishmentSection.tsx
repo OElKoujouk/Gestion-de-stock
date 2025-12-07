@@ -51,11 +51,6 @@ export function AdminEstablishmentSection() {
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [articlesLoading, setArticlesLoading] = useState(false);
   const [articlesError, setArticlesError] = useState<string | null>(null);
-  const [categories, setCategories] = useState<{ id: string; nom: string }[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
-
   const [selectedEtablissementId, setSelectedEtablissementId] = useState<string | null>(null);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -67,6 +62,11 @@ export function AdminEstablishmentSection() {
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string | null>(null);
   const [showAllUsers, setShowAllUsers] = useState(false);
   const [showAllEstablishments, setShowAllEstablishments] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; nom: string }[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [emailRecipient, setEmailRecipient] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const fetchEstablishments = useCallback(async () => {
     setLoading(true);
@@ -120,17 +120,16 @@ export function AdminEstablishmentSection() {
   const fetchCategories = useCallback(async (establishmentId: string | null) => {
     if (!establishmentId) {
       setCategories([]);
+      setCategoriesError(null);
       return;
     }
-    setCategoriesLoading(true);
     try {
       const data = await api.getCategories({ etablissementId: establishmentId });
       setCategories(data);
       setCategoriesError(null);
     } catch (err) {
+      setCategories([]);
       setCategoriesError(err instanceof Error ? err.message : "Impossible de charger les categories");
-    } finally {
-      setCategoriesLoading(false);
     }
   }, []);
 
@@ -163,17 +162,18 @@ export function AdminEstablishmentSection() {
   useEffect(() => {
     void fetchArticles(selectedEtablissementId);
     void fetchCategories(selectedEtablissementId);
-    setSelectedCategoryId("");
     setSelectedRoleFilter(null);
     setShowAllUsers(false);
   }, [establishments, fetchArticles, fetchCategories, selectedEtablissementId]);
 
-  const filteredArticles = useMemo(() => {
-    if (!selectedCategoryId) return articles;
-    return articles.filter((article) => article.categorieId === selectedCategoryId);
-  }, [articles, selectedCategoryId]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
-  const categoryById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.nom])), [categories]);
+  const filteredArticles = articles;
+  const categoryNameById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.nom])), [categories]);
 
   const lowStockArticles = useMemo(() => articles.filter((article) => article.quantite <= article.seuilAlerte), [articles]);
 
@@ -181,6 +181,7 @@ export function AdminEstablishmentSection() {
     setEstablishments((prev) => [establishment, ...prev]);
     setSelectedEtablissementId(establishment.id);
     setEstablishmentDialogOpen(false);
+    setToast({ message: `Etablissement cree : ${establishment.nom}`, type: "success" });
   };
 
   const handleEstablishmentUpdated = (updated: Establishment) => {
@@ -206,7 +207,7 @@ export function AdminEstablishmentSection() {
     }
     return list.filter((user) => user.id !== currentUserId);
   }, [assignedUsers, currentUserId, selectedRoleFilter]);
-  const VISIBLE_LIMIT = 2;
+  const VISIBLE_LIMIT = 3;
   const limitedUsers = showAllUsers ? filteredAssignedUsers : filteredAssignedUsers.slice(0, VISIBLE_LIMIT);
   const canToggleUserList = filteredAssignedUsers.length > VISIBLE_LIMIT;
   const ESTABLISHMENTS_VISIBLE_LIMIT = 2;
@@ -277,9 +278,10 @@ export function AdminEstablishmentSection() {
     }
   };
 
-  const handleUserCreated = () => {
+  const handleUserCreated = (user: { id: string; nom: string; email: string; role: string; etablissementId: string | null }) => {
     setUserDialogOpen(false);
     void fetchUsers();
+    setToast({ message: `Role cree : ${user.nom} (${user.email}) en ${ROLE_LABELS[user.role] ?? user.role}`, type: "success" });
   };
 
   const handleOpenEdit = (user: UserSummary) => {
@@ -302,14 +304,84 @@ export function AdminEstablishmentSection() {
     try {
       await api.deleteUser(user.id);
       await fetchUsers();
+      setToast({ message: `Utilisateur supprime : ${user.nom}`, type: "success" });
     } catch (err) {
       setUsersError(err instanceof Error ? err.message : "Impossible de supprimer l'utilisateur");
+      setToast({ message: "Erreur lors de la suppression", type: "error" });
     } finally {
       setDeletingUserId(null);
     }
   };
 
   const roleDisplayOrder: Array<keyof typeof ROLE_LABELS> = ["admin", "responsable", "agent"];
+  const inventoryCsv = useMemo(() => {
+    if (!selectedEtablissement || filteredArticles.length === 0) {
+      return "";
+    }
+    const header = ["Categorie", "Article", "Reference", "Quantite", "Seuil"];
+    const sortedArticles = filteredArticles
+      .slice()
+      .sort((a, b) => {
+        const ca = categoryNameById[a.categorieId ?? ""] ?? "";
+        const cb = categoryNameById[b.categorieId ?? ""] ?? "";
+        if (ca && cb && ca !== cb) {
+          return ca.localeCompare(cb, "fr");
+        }
+        if (ca && !cb) return -1;
+        if (!ca && cb) return 1;
+        return a.nom.localeCompare(b.nom, "fr");
+      });
+    const rows = sortedArticles.map((article) => [
+      (categoryNameById[article.categorieId ?? ""] ?? "Sans categorie").replace(/;/g, ","),
+      article.nom.replace(/;/g, ","),
+      (article.referenceFournisseur ?? "N/A").replace(/;/g, ","),
+      String(article.quantite),
+      String(article.seuilAlerte),
+    ]);
+    return [header, ...rows].map((row) => row.join(";")).join("\n");
+  }, [categoryNameById, filteredArticles, selectedEtablissement]);
+
+  const handleDownloadInventory = () => {
+    if (!selectedEtablissement || !inventoryCsv) {
+      return;
+    }
+    const blob = new Blob(["\ufeff", inventoryCsv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeName = selectedEtablissement.nom.toLowerCase().replace(/\s+/g, "-");
+    link.href = url;
+    link.download = `inventaire-${safeName}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSendInventoryByEmail = () => {
+    if (!selectedEtablissement) {
+      setEmailError("Selectionnez un etablissement.");
+      return;
+    }
+    if (filteredArticles.length === 0) {
+      setEmailError("Aucun article n'est disponible pour l'inventaire.");
+      return;
+    }
+    if (!emailRecipient.trim()) {
+      setEmailError("Merci de renseigner une adresse e-mail.");
+      return;
+    }
+    setEmailError(null);
+    const subject = encodeURIComponent(`Inventaire ${selectedEtablissement.nom}`);
+    const summary =
+      filteredArticles
+        .map((article) => `- ${article.nom}: ${article.quantite}`)
+        .join("\n")
+        .slice(0, 700) || "Inventaire vide.";
+    const body = encodeURIComponent(
+      `Bonjour,\n\nVous trouverez ci-dessous un extrait de l'inventaire pour ${selectedEtablissement.nom}.\n\n${summary}\n\nNombre total d'articles: ${filteredArticles.length}\n\n-- Console Gestion de stock`,
+    );
+    window.location.href = `mailto:${encodeURIComponent(emailRecipient)}?subject=${subject}&body=${body}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -383,7 +455,7 @@ export function AdminEstablishmentSection() {
                         Actif
                       </span>
                     </button>
-                    {showAllEstablishments ? (
+                    {isSuperAdmin ? (
                       <div className="flex items-center gap-3 border-t border-slate-100 px-4 py-2 text-xs font-semibold">
                         <button
                           type="button"
@@ -535,9 +607,11 @@ export function AdminEstablishmentSection() {
                         <button
                           type="button"
                           onClick={() => setShowAllUsers((prev) => !prev)}
-                          className="text-xs font-semibold text-slate-900 underline"
+                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
-                          {showAllUsers ? "Afficher moins" : `Afficher tous (${filteredAssignedUsers.length})`}
+                          {showAllUsers
+                            ? "Voir moins"
+                            : `Voir les ${filteredAssignedUsers.length - VISIBLE_LIMIT} autres`}
                         </button>
                       </div>
                     ) : null}
@@ -580,75 +654,65 @@ export function AdminEstablishmentSection() {
       </Card>
 
       <Card>
-        <CardHeader title="Stock de l'etablissement" subtitle="Articles et quantites disponibles" />
+        <CardHeader title="Inventaire de l'etablissement" subtitle="Export et diffusion de l'inventaire" />
         {selectedEtablissement ? (
           articlesLoading ? (
             <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
           ) : articlesError ? (
             <p className="px-4 py-3 text-sm text-rose-600">{articlesError}</p>
-          ) : filteredArticles.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-slate-500">Aucun article pour cet etablissement.</p>
           ) : (
-            <div className="mt-4 overflow-x-auto text-sm">
-              {categories.length > 0 ? (
-                <div className="mb-3 flex flex-wrap gap-3 px-2">
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
-                    Categorie
-                    <select
-                      className="rounded-full border border-slate-300 px-3 py-1"
-                      value={selectedCategoryId}
-                      onChange={(event) => setSelectedCategoryId(event.target.value)}
-                      disabled={categoriesLoading}
-                    >
-                      <option value="">Toutes</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.nom}
-                        </option>
-                      ))}
-                    </select>
-                    {categoriesLoading ? <span className="text-xs text-slate-500">Maj...</span> : null}
-                    {categoriesError ? <span className="text-xs text-rose-600">{categoriesError}</span> : null}
-                  </label>
+            <div className="space-y-3 px-4 pb-5 text-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventaire</p>
+                    <p className="text-base font-semibold text-slate-900">{selectedEtablissement.nom}</p>
+                    <p className="text-xs text-slate-500">Export CSV + partage email.</p>
+                  </div>
+                  <div className="flex gap-2 text-xs text-slate-500">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-800">{filteredArticles.length} articles</span>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 font-semibold text-slate-600">{categories.length} categories</span>
+                  </div>
                 </div>
-              ) : null}
-              <table className="min-w-full">
-                <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="pb-3 pr-6 font-semibold">Article</th>
-                    <th className="pb-3 pr-6 font-semibold">Reference</th>
-                    <th className="pb-3 pr-6 font-semibold">Quantite</th>
-                    <th className="pb-3 font-semibold">Seuil</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredArticles
-                    .slice()
-                    .sort((a, b) => {
-                      const ca = categoryById[a.categorieId ?? ""] ?? "";
-                      const cb = categoryById[b.categorieId ?? ""] ?? "";
-                      if (ca !== cb) return ca.localeCompare(cb);
-                      return a.nom.localeCompare(b.nom);
-                    })
-                    .map((article) => {
-                  const isLow = article.quantite <= article.seuilAlerte;
-                      return (
-                        <tr key={article.id}>
-                          <td className="py-3 pr-6 font-semibold text-slate-900">{article.nom}</td>
-                          <td className="py-3 pr-6 text-slate-500">{article.referenceFournisseur ?? "—"}</td>
-                          <td className="py-3 pr-6">
-                        <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.quantite}</span>
-                          </td>
-                          <td className="py-3">{article.seuilAlerte}</td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+                <div className="mt-4 flex flex-col gap-3 md:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleDownloadInventory}
+                    className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+                    disabled={!inventoryCsv}
+                  >
+                    Telecharger l'inventaire (.csv)
+                  </button>
+                  <div className="flex flex-1 flex-col gap-2 md:flex-row">
+                    <input
+                      type="email"
+                      placeholder="destinataire@domaine.fr"
+                      value={emailRecipient}
+                      onChange={(event) => setEmailRecipient(event.target.value)}
+                      className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendInventoryByEmail}
+                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                      disabled={filteredArticles.length === 0}
+                    >
+                      Envoyer
+                    </button>
+                  </div>
+                </div>
+                {emailError ? <p className="text-xs font-semibold text-rose-600">{emailError}</p> : null}
+              </div>
+              <div className="text-xs text-slate-500">
+                {filteredArticles.length === 0
+                  ? "Aucun article n'est associe a cet etablissement pour le moment."
+                  : `Inventaire compile sur ${filteredArticles.length} article(s) repartis sur ${categories.length} categorie(s).`}
+              </div>
+              {categoriesError ? <p className="text-xs font-semibold text-rose-600">{categoriesError}</p> : null}
             </div>
           )
         ) : (
-          <p className="px-4 py-3 text-sm text-slate-500">Selectionnez un etablissement pour voir le stock.</p>
+          <p className="px-4 py-3 text-sm text-slate-500">Selectionnez un etablissement pour generer un inventaire.</p>
         )}
       </Card>
 
@@ -682,6 +746,18 @@ export function AdminEstablishmentSection() {
         establishments={establishments}
         canSelectTenant={false}
       />
+      {toast ? (
+        <div
+          className={cn(
+            "fixed bottom-4 right-4 z-50 max-w-sm rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg",
+            toast.type === "success"
+              ? "bg-emerald-600 text-white shadow-emerald-700/30"
+              : "bg-rose-600 text-white shadow-rose-700/30",
+          )}
+        >
+          {toast.message}
+        </div>
+      ) : null}
     </div>
   );
 }

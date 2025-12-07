@@ -6,17 +6,40 @@ import { allowRoles } from "../middleware/role";
 
 export const demandesRouter = Router();
 
+const generateReference = () => {
+  const randomPart = Math.random().toString(36).replace("0.", "").slice(0, 6).toUpperCase().padEnd(6, "X");
+  return `CMD-${randomPart}`;
+};
+
+const createUniqueReference = async () => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const reference = generateReference();
+    const existing = await prisma.demande.findUnique({ where: { reference } });
+    if (!existing) return reference;
+  }
+  throw new Error("Impossible de generer une reference unique pour la demande");
+};
+
 demandesRouter.post("/", allowRoles("agent", "responsable", "admin"), async (req, res) => {
   if (!req.tenantId || !req.user) return res.status(400).json({ message: "Tenant requis" });
   const { items } = req.body as { items?: Array<{ articleId: string; quantite: number }> };
   if (!items || items.length === 0) {
     return res.status(400).json({ message: "Une demande doit contenir au moins un article" });
   }
+
+  let reference: string | undefined;
+  try {
+    reference = await createUniqueReference();
+  } catch (error) {
+    return res.status(500).json({ message: "Generation de reference impossible" });
+  }
+
   const demande = await prisma.demande.create({
     data: {
       etablissementId: req.tenantId,
       agentId: req.user.id,
       statut: "en_attente",
+      reference,
       items: {
         createMany: {
           data: items.map((item) => ({

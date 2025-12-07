@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
+import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +18,9 @@ type DemandeItem = {
 type Demande = {
   id: string;
   statut: DemandeStatus;
+  reference?: string | null;
   items: DemandeItem[];
+  etablissement?: { id: string; nom: string };
   agent?: { id: string; nom: string; email: string };
   createdAt?: string;
   updatedAt?: string;
@@ -42,18 +45,36 @@ const statusStyle: Record<DemandeStatus, string> = {
 const dateFormatter = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
 export function StoreManagerSection() {
+  const { role } = useAuth();
+  const isSuperAdmin = role === "superAdmin";
+
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [demandesLoading, setDemandesLoading] = useState(true);
   const [demandesError, setDemandesError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [expandedDemandes, setExpandedDemandes] = useState<Record<string, boolean>>({});
+  const [showAllDemandes, setShowAllDemandes] = useState(false);
+
+  const [establishments, setEstablishments] = useState<Array<{ id: string; nom: string }>>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
 
   const [articles, setArticles] = useState<ArticleWithStock[]>([]);
   const [quantityEdits, setQuantityEdits] = useState<Record<string, number>>({});
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
+    if (isSuperAdmin) {
+      api
+        .getEstablishments()
+        .then((data) => setEstablishments(data.map((e: any) => ({ id: e.id, nom: e.nom }))))
+        .catch(() => setEstablishments([]));
+    }
+  }, [isSuperAdmin]);
+
+  useEffect(() => {
+    const params = isSuperAdmin && selectedTenantId ? { etablissementId: selectedTenantId } : undefined;
     api
-      .getArticles()
+      .getArticles(params)
       .then((data) =>
         setArticles(
           data.map((item: { id: string; nom: string; quantite: number; seuilAlerte: number }) => ({
@@ -65,7 +86,7 @@ export function StoreManagerSection() {
         ),
       )
       .catch(() => setArticles([]));
-  }, []);
+  }, [isSuperAdmin, selectedTenantId]);
 
   const articleIndex = useMemo(() => {
     const map = new Map<string, ArticleWithStock>();
@@ -81,8 +102,9 @@ export function StoreManagerSection() {
 
   const fetchDemandes = () => {
     setDemandesLoading(true);
+    const params = isSuperAdmin && selectedTenantId ? { etablissementId: selectedTenantId } : undefined;
     api
-      .getDemandes()
+      .getDemandes(params)
       .then((data) => {
         setDemandes(data);
         setDemandesError(null);
@@ -100,7 +122,13 @@ export function StoreManagerSection() {
 
   useEffect(() => {
     fetchDemandes();
-  }, []);
+  }, [selectedTenantId, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const activeDemandes = useMemo(() => demandes.filter((demande) => demande.statut === "en_attente" || demande.statut === "modifiee"), [demandes]);
 
@@ -113,6 +141,7 @@ export function StoreManagerSection() {
       }),
     [activeDemandes],
   );
+  const visibleDemandes = useMemo(() => (showAllDemandes ? demandesSorted : demandesSorted.slice(0, 3)), [demandesSorted, showAllDemandes]);
 
   const handleQuantityChange = (itemId: string, value: number) => {
     if (Number.isNaN(value) || value < 0) return;
@@ -129,8 +158,11 @@ export function StoreManagerSection() {
       }));
       const updated = await api.updateDemande(demande.id, { statut, items: itemsPayload });
       setDemandes((prev) => prev.map((d) => (d.id === demande.id ? (updated as Demande) : d)));
+      const statusLabelText = statut === "preparee" ? "validee" : "modifiee";
+      setToast({ message: `Commande ${formatDemandeRef(demande)} ${statusLabelText}`, type: "success" });
     } catch (err) {
       setDemandesError(err instanceof Error ? err.message : "Impossible de mettre à jour la demande.");
+      setToast({ message: "Erreur lors de la mise a jour", type: "error" });
     } finally {
       setSavingId(null);
     }
@@ -158,6 +190,10 @@ export function StoreManagerSection() {
       })
       .join(", ");
 
+  const demandeCode = (demande: Demande) => demande.reference ?? `CMD-${demande.id.slice(-6).toUpperCase()}`;
+
+  const formatDemandeRef = (demande: Demande) => demandeCode(demande);
+
   const demandeLabel = (demande: Demande) => {
     const firstArticle = demande.items[0] ? articleIndex.get(demande.items[0].articleId)?.nom ?? "Demande" : "Demande";
     const date = demande.createdAt ? dateFormatter.format(new Date(demande.createdAt)) : "";
@@ -176,75 +212,60 @@ export function StoreManagerSection() {
         description="Consulte les demandes des agents, ajuste les quantites demandees et valide la preparation (avec decrement automatique du stock). Acces aux categories et produits pour maintenir l'inventaire."
       />
 
-      <Card>
-        <CardHeader title="Produits en alerte" subtitle="Quantites au seuil ou en dessous" />
-        {articles.length === 0 ? (
-          <p className="text-sm text-slate-500">Chargement des articles...</p>
-        ) : lowStockArticles.length === 0 ? (
-          <p className="text-sm text-emerald-600">Aucun produit n'est actuellement au seuil.</p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {lowStockArticles.map((article) => {
-              const deficit = article.seuilAlerte - article.quantite;
-              const ratio = article.seuilAlerte > 0 ? Math.min(article.quantite / article.seuilAlerte, 1) : 1;
-              return (
-                <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-inner shadow-amber-100">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
-                      <p className="text-xs text-slate-600">
-                        Stock actuel: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
-                        <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
-                      </p>
+      {isSuperAdmin ? (
+        <Card>
+          <CardHeader title="Etablissement" subtitle="Filtrer les commandes internes" />
+          <div className="mt-2">
+            <select
+              value={selectedTenantId}
+              onChange={(e) => setSelectedTenantId(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            >
+              <option value="">Tous les etablissements</option>
+              {establishments.map((etab) => (
+                <option key={etab.id} value={etab.id}>
+                  {etab.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader title="Produits en alerte" subtitle="Quantites au seuil ou en dessous" />
+          {articles.length === 0 ? (
+            <p className="text-sm text-slate-500">Chargement des articles...</p>
+          ) : lowStockArticles.length === 0 ? (
+            <p className="text-sm text-emerald-600">Aucun produit n'est actuellement au seuil.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {lowStockArticles.map((article) => {
+                const deficit = article.seuilAlerte - article.quantite;
+                const ratio = article.seuilAlerte > 0 ? Math.min(article.quantite / article.seuilAlerte, 1) : 1;
+                return (
+                  <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-inner shadow-amber-100">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
+                        <p className="text-xs text-slate-600">
+                          Stock actuel: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
+                          <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                        {deficit >= 0 ? `Manque ${deficit}` : "Seuil atteint"}
+                      </span>
                     </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">
-                      {deficit >= 0 ? `Manque ${deficit}` : "Seuil atteint"}
-                    </span>
+                    <div className="mt-3 h-2 rounded-full bg-white/70">
+                      <div className="h-full rounded-full bg-amber-400" style={{ width: `${ratio * 100}%` }} />
+                    </div>
                   </div>
-                  <div className="mt-3 h-2 rounded-full bg-white/70">
-                    <div className="h-full rounded-full bg-amber-400" style={{ width: `${ratio * 100}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <CardHeader title="Stock de l'etablissement" subtitle="Articles et quantites disponibles" />
-        {articles.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
-        ) : sortedArticles.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-slate-500">Aucun article disponible.</p>
-        ) : (
-          <div className="mt-3 overflow-x-auto text-sm">
-            <table className="min-w-full">
-              <thead className="text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="pb-3 pr-6 font-semibold">Article</th>
-                  <th className="pb-3 pr-6 font-semibold">Quantite</th>
-                  <th className="pb-3 font-semibold">Seuil</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sortedArticles.map((article) => {
-                  const isLow = article.quantite <= article.seuilAlerte;
-                  return (
-                    <tr key={article.id}>
-                      <td className="py-3 pr-6 font-semibold text-slate-900">{article.nom}</td>
-                      <td className="py-3 pr-6">
-                        <span className={cn(isLow ? "text-rose-600" : "text-slate-900")}>{article.quantite}</span>
-                      </td>
-                      <td className="py-3">{article.seuilAlerte}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card>
         <CardHeader title="Demandes des agents" subtitle="Preparation et mise a jour des quantites" />
@@ -256,7 +277,7 @@ export function StoreManagerSection() {
           ) : demandesSorted.length === 0 ? (
             <p className="text-sm text-slate-500">Aucune demande en cours.</p>
           ) : (
-            demandesSorted.map((demande: Demande) => {
+            visibleDemandes.map((demande: Demande) => {
               const isEditable = demande.statut === "en_attente" || demande.statut === "modifiee";
               const isExpanded = expandedDemandes[demande.id] ?? false;
               return (
@@ -268,6 +289,7 @@ export function StoreManagerSection() {
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{demande.agent?.nom ?? "Agent inconnu"}</p>
+                      <p className="text-xs text-slate-600">{formatDemandeRef(demande)}</p>
                     </div>
                     <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusStyle[demande.statut])}>
                       {statusLabel[demande.statut]}
@@ -311,6 +333,7 @@ export function StoreManagerSection() {
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                        <span className="rounded-full bg-white px-2 py-1">{formatDemandeRef(demande)}</span>
                         <span className="rounded-full bg-white px-2 py-1">{formatItems(demande.items)}</span>
                         <span className="rounded-full bg-white px-2 py-1">{demandeLabel(demande)}</span>
                       </div>
@@ -353,8 +376,31 @@ export function StoreManagerSection() {
               );
             })
           )}
+          {demandesSorted.length > 3 && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setShowAllDemandes((prev) => !prev)}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {showAllDemandes ? "Voir moins" : `Voir les ${demandesSorted.length - 3} autres`}
+              </button>
+            </div>
+          )}
         </div>
       </Card>
+      {toast ? (
+        <div
+          className={cn(
+            "fixed bottom-4 right-4 z-50 max-w-sm rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg",
+            toast.type === "success"
+              ? "bg-emerald-600 text-white shadow-emerald-700/30"
+              : "bg-rose-600 text-white shadow-rose-700/30",
+          )}
+        >
+          {toast.message}
+        </div>
+      ) : null}
     </div>
   );
 }

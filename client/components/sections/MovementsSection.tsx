@@ -20,6 +20,7 @@ type DemandeItem = {
 type Demande = {
   id: string;
   statut: DemandeStatus;
+  reference?: string | null;
   items: DemandeItem[];
   agent?: { id: string; nom: string; email: string };
   createdAt?: string;
@@ -73,6 +74,8 @@ export function MovementsSection() {
     useState<"all" | "preparee" | "modifiee" | "refusee">("all");
   const [sortMode, setSortMode] =
     useState<"date_desc" | "date_asc">("date_desc");
+  const [refQuery, setRefQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -131,18 +134,50 @@ export function MovementsSection() {
     return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
   }, [mouvements]);
 
+  const demandesRefSorted = useMemo(
+    () =>
+      [...demandes].sort((a, b) => {
+        const da = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
+        const db = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
+        return db - da;
+      }),
+    [demandes],
+  );
+
+  const demandeRefIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    demandesRefSorted.forEach((demande, index) => map.set(demande.id, index));
+    return map;
+  }, [demandesRefSorted]);
+
+  const demandeCode = (demande: Demande) => demande.reference ?? `CMD-${demande.id.slice(-6).toUpperCase()}`;
+
+  const formatDemandeRef = (demande: Demande) => {
+    const index = demandeRefIndex.get(demande.id) ?? 0;
+    return demandeCode(demande);
+  };
+
   const filtered = useMemo(() => {
+    const query = refQuery.trim().toLowerCase();
     return mouvements
       .filter((d) => (agentFilter ? d.agent?.id === agentFilter : true))
       .filter((d) =>
         statusFilter === "all" ? true : d.statut === statusFilter,
       )
+      .filter((d) => {
+        if (!query) return true;
+        const ref = formatDemandeRef(d).toLowerCase();
+        const rawId = d.id.toLowerCase();
+        return ref.includes(query) || rawId.includes(query);
+      })
       .sort((a, b) => {
         const da = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime();
         const db = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
         return sortMode === "date_desc" ? db - da : da - db;
       });
-  }, [mouvements, agentFilter, statusFilter, sortMode]);
+  }, [mouvements, agentFilter, statusFilter, sortMode, refQuery]);
+
+  const visibleMouvements = useMemo(() => (showAll ? filtered : filtered.slice(0, 3)), [filtered, showAll]);
 
   /* ───────────────────── Render ───────────────────── */
 
@@ -158,6 +193,14 @@ export function MovementsSection() {
       <Card>
         <CardHeader title="Filtres" />
         <div className="flex flex-wrap gap-3 pt-2">
+          <input
+            type="search"
+            value={refQuery}
+            onChange={(e) => setRefQuery(e.target.value)}
+            placeholder="Rechercher par ref (Commande / CMD-XXXXXX)"
+            className="w-full max-w-xs rounded-full border px-3 py-1 text-sm"
+          />
+
           {isSuperAdmin && (
             <select
               value={selectedTenantId}
@@ -223,7 +266,7 @@ export function MovementsSection() {
           <p className="text-sm text-slate-500">Aucun mouvement.</p>
         ) : (
           <div className="mt-4 space-y-3">
-            {filtered.map((d) => {
+            {visibleMouvements.map((d) => {
               const status = d.statut as Exclude<
                 DemandeStatus,
                 "en_attente"
@@ -249,8 +292,11 @@ export function MovementsSection() {
                         {d.agent?.nom?.[0]?.toUpperCase() ?? "?"}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-slate-900">
+                        <p className="text-sm font-semibold text-slate-900">
                           {d.agent?.nom ?? "Agent inconnu"}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          {formatDemandeRef(d)}
                         </p>
                         <p className="text-xs text-slate-500">
                           {d.items.length} article(s)
@@ -288,6 +334,9 @@ export function MovementsSection() {
                   {/* Détails */}
                   {isOpen && (
                     <div className="border-t border-slate-100 bg-slate-50 px-6 py-4">
+                      <div className="mb-2 inline-flex items-center rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
+                        {formatDemandeRef(d)}
+                      </div>
                       <ul className="space-y-2 text-sm">
                         {d.items.map((item) => {
                           const article =
@@ -317,6 +366,18 @@ export function MovementsSection() {
                 </div>
               );
             })}
+
+            {filtered.length > 3 && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAll((prev) => !prev)}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  {showAll ? "Voir moins" : `Voir les ${filtered.length - 3} autres`}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </Card>

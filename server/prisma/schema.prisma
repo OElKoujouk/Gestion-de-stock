@@ -126,6 +126,7 @@ model Demande {
   agentId         String   @map("agent_id")
   agent           User     @relation("AgentDemandes", fields: [agentId], references: [id])
   statut          DemandeStatut
+  reference       String?  @unique
   items           DemandeItem[]
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")

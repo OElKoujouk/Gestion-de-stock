@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: () => void;
+  onCreated: (user: { id: string; nom: string; email: string; role: string; etablissementId: string | null }) => void;
   establishments: Array<{ id: string; nom: string }>;
   canSelectTenant: boolean;
   forcedTenantId?: string | null;
@@ -50,7 +50,7 @@ export function CreateUserForm({
     setError(null);
     setLoading(true);
     try {
-      await api.createUser({
+      const created = await api.createUser({
         nom: form.nom,
         email: form.email,
         motDePasse: form.motDePasse,
@@ -62,7 +62,7 @@ export function CreateUserForm({
               ? form.etablissementId || null
               : undefined,
       });
-      onCreated();
+      onCreated(created);
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de créer l’utilisateur");

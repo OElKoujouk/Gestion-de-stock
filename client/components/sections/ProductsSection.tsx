@@ -25,6 +25,8 @@ const initialArticleForm = {
   seuilAlerte: 0,
 };
 
+const PRODUCT_GRID_TEMPLATE = "2fr 1fr 0.7fr 0.7fr 0.9fr";
+
 export function ProductsSection() {
   const { role } = useAuth();
   const isSuperAdmin = role === "superAdmin";
@@ -53,6 +55,7 @@ export function ProductsSection() {
   const [articleError, setArticleError] = useState<string | null>(null);
   const [savingArticleId, setSavingArticleId] = useState<string | null>(null);
   const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnlyAlerts, setShowOnlyAlerts] = useState(false);
@@ -130,8 +133,10 @@ export function ProductsSection() {
   useEffect(() => {
     if (!readyToManage) {
       setLoading({ categories: false, articles: false });
+      setEditingArticleId(null);
       return;
     }
+    setEditingArticleId(null);
     void fetchCategories(targetTenantId);
     void fetchArticles(targetTenantId);
   }, [readyToManage, targetTenantId]);
@@ -239,6 +244,7 @@ export function ProductsSection() {
     try {
       await api.deleteArticle(articleId);
       setArticles((prev) => prev.filter((a) => a.id !== articleId));
+      setEditingArticleId((prev) => (prev === articleId ? null : prev));
     } catch (err) {
       setArticleError(
         err instanceof Error ? err.message : "Impossible de supprimer le produit",
@@ -679,7 +685,7 @@ export function ProductsSection() {
         ) : articlesGroupedByCategory.length === 0 ? (
           <p className="text-sm text-slate-500">Aucun article pour le moment.</p>
         ) : (
-          <div className="mt-4 space-y-4 text-sm">
+          <div className="mt-3 space-y-3 text-sm">
             {articlesGroupedByCategory.map((group) => {
               const groupAlert = group.items.some(
                 (article) => article.quantite <= article.seuilAlerte,
@@ -688,38 +694,41 @@ export function ProductsSection() {
                 <div
                   key={group.id}
                   className={cn(
-                    "overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm",
+                    "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm",
                     groupAlert && "border-amber-300",
                   )}
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-2.5 py-2 text-[13px] sm:text-sm">
                     <div>
-                      <p className="text-[11px] uppercase tracking-[0.25em] text-slate-500">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
                         Catégorie
                       </p>
-                      <p className="text-lg font-semibold text-slate-900">{group.label}</p>
+                      <p className="text-sm font-semibold text-slate-900">{group.label}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
                         {group.items.length} article
                         {group.items.length > 1 ? "s" : ""}
                       </span>
                       {groupAlert ? (
-                        <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
                           Alerte sur cette catégorie
                         </span>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-100 text-[13px] sm:text-sm">
                     {/* En-tête colonnes */}
-                    <div className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      <span className="col-span-4 sm:col-span-4">Nom</span>
-                      <span className="col-span-3 sm:col-span-3">Référence</span>
-                      <span className="col-span-2 sm:col-span-2 text-center">Quantité</span>
-                      <span className="col-span-2 sm:col-span-2 text-center">Seuil</span>
-                      {readyToManage ? <span className="col-span-1 text-right">Actions</span> : null}
+                    <div
+                      className="grid items-center gap-2 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                      style={{ gridTemplateColumns: PRODUCT_GRID_TEMPLATE }}
+                    >
+                      <span>Nom</span>
+                      <span>Référence</span>
+                      <span className="text-center">Quantité</span>
+                      <span className="text-center">Seuil</span>
+                      {readyToManage ? <span className="text-right">Actions</span> : null}
                     </div>
 
                     {/* Lignes produits */}
@@ -728,8 +737,10 @@ export function ProductsSection() {
                       .sort((a, b) => a.nom.localeCompare(b.nom))
                       .map((article) => {
                         const inAlert = article.quantite <= article.seuilAlerte;
-                        const disableEdit =
+                        const isEditing = editingArticleId === article.id;
+                        const disableInputs =
                           !readyToManage ||
+                          !isEditing ||
                           savingArticleId === article.id ||
                           deletingArticleId === article.id;
 
@@ -737,125 +748,170 @@ export function ProductsSection() {
                           <div
                             key={article.id}
                             className={cn(
-                              "grid grid-cols-12 items-center gap-3 px-4 py-3 sm:py-2",
+                              "grid items-center gap-2 px-2.5 py-1.5",
                               inAlert && "bg-amber-50/60",
                             )}
+                            style={{ gridTemplateColumns: PRODUCT_GRID_TEMPLATE }}
                           >
                             {/* Nom */}
-                            <div className="col-span-4 sm:col-span-4">
-                              <input
-                                className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
-                                value={article.nom}
-                                disabled={disableEdit}
-                                onChange={(event) =>
-                                  setArticles((prev) =>
-                                    prev.map((item) =>
-                                      item.id === article.id
-                                        ? { ...item, nom: event.target.value }
-                                        : item,
-                                    ),
-                                  )
-                                }
-                                onBlur={(event) =>
-                                  updateArticleField(article.id, {
-                                    nom: event.target.value.trim(),
-                                  })
-                                }
-                              />
+                            <div className="flex flex-col gap-1">
+                              {isEditing ? (
+                                <input
+                                  className="w-full rounded-full border border-slate-200 px-2.5 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
+                                  value={article.nom}
+                                  disabled={disableInputs}
+                                  onChange={(event) =>
+                                    setArticles((prev) =>
+                                      prev.map((item) =>
+                                        item.id === article.id
+                                          ? { ...item, nom: event.target.value }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  onBlur={(event) =>
+                                    updateArticleField(article.id, {
+                                      nom: event.target.value.trim(),
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <p className="font-semibold text-slate-900">{article.nom}</p>
+                              )}
+                              {inAlert ? (
+                                <span className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
+                                  Niveau d'alerte atteint (quantite ≤ seuil)
+                                </span>
+                              ) : null}
                             </div>
 
                             {/* Référence */}
-                            <div className="col-span-3 sm:col-span-3">
-                              <input
-                                className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
-                                value={article.referenceFournisseur ?? ""}
-                                disabled={disableEdit}
-                                onChange={(event) =>
-                                  setArticles((prev) =>
-                                    prev.map((item) =>
-                                      item.id === article.id
-                                        ? {
-                                            ...item,
-                                            referenceFournisseur: event.target.value,
-                                          }
-                                        : item,
-                                    ),
-                                  )
-                                }
-                                onBlur={(event) =>
-                                  updateArticleField(article.id, {
-                                    referenceFournisseur:
-                                      event.target.value.trim() || null,
-                                  })
-                                }
-                              />
+                            <div>
+                              {isEditing ? (
+                                <input
+                                  className="w-full rounded-full border border-slate-200 px-2.5 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
+                                  value={article.referenceFournisseur ?? ""}
+                                  disabled={disableInputs}
+                                  onChange={(event) =>
+                                    setArticles((prev) =>
+                                      prev.map((item) =>
+                                        item.id === article.id
+                                          ? {
+                                              ...item,
+                                              referenceFournisseur: event.target.value,
+                                            }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  onBlur={(event) =>
+                                    updateArticleField(article.id, {
+                                      referenceFournisseur:
+                                        event.target.value.trim() || null,
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <p className="text-slate-600">
+                                  {article.referenceFournisseur ?? "—"}
+                                </p>
+                              )}
                             </div>
 
                             {/* Quantité */}
-                            <div className="col-span-2 sm:col-span-2">
-                              <input
-                                type="number"
-                                min={0}
-                                className={cn(
-                                  "w-full rounded-full border border-slate-200 px-3 py-1 text-sm text-center focus:border-emerald-500/70 focus:outline-none",
-                                  inAlert ? "text-rose-600" : "text-slate-900",
-                                )}
-                                value={article.quantite}
-                                disabled={disableEdit}
-                                onChange={(event) =>
-                                  setArticles((prev) =>
-                                    prev.map((item) =>
-                                      item.id === article.id
-                                        ? {
-                                            ...item,
-                                            quantite: Number(event.target.value),
-                                          }
-                                        : item,
-                                    ),
-                                  )
-                                }
-                                onBlur={(event) =>
-                                  updateArticleField(article.id, {
-                                    quantite: Number(event.target.value),
-                                  })
-                                }
-                              />
+                            <div>
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className={cn(
+                                    "w-full rounded-full border border-slate-200 px-2.5 py-1 text-sm text-center focus:border-emerald-500/70 focus:outline-none",
+                                    inAlert ? "text-rose-600" : "text-slate-900",
+                                  )}
+                                  value={article.quantite}
+                                  disabled={disableInputs}
+                                  onChange={(event) =>
+                                    setArticles((prev) =>
+                                      prev.map((item) =>
+                                        item.id === article.id
+                                          ? {
+                                              ...item,
+                                              quantite: Number(event.target.value),
+                                            }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  onBlur={(event) =>
+                                    updateArticleField(article.id, {
+                                      quantite: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "block text-center font-semibold",
+                                    inAlert ? "text-rose-600" : "text-slate-900",
+                                  )}
+                                >
+                                  {article.quantite}
+                                </span>
+                              )}
                             </div>
 
                             {/* Seuil */}
-                            <div className="col-span-2 sm:col-span-2">
-                              <input
-                                type="number"
-                                min={0}
-                                className="w-full rounded-full border border-slate-200 px-3 py-1 text-sm text-center focus:border-emerald-500/70 focus:outline-none"
-                                value={article.seuilAlerte}
-                                disabled={disableEdit}
-                                onChange={(event) =>
-                                  setArticles((prev) =>
-                                    prev.map((item) =>
-                                      item.id === article.id
-                                        ? {
-                                            ...item,
-                                            seuilAlerte: Number(event.target.value),
-                                          }
-                                        : item,
-                                    ),
-                                  )
-                                }
-                                onBlur={(event) =>
-                                  updateArticleField(article.id, {
-                                    seuilAlerte: Number(event.target.value),
-                                  })
-                                }
-                              />
+                            <div>
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-full rounded-full border border-slate-200 px-2.5 py-1 text-sm text-center focus:border-emerald-500/70 focus:outline-none"
+                                  value={article.seuilAlerte}
+                                  disabled={disableInputs}
+                                  onChange={(event) =>
+                                    setArticles((prev) =>
+                                      prev.map((item) =>
+                                        item.id === article.id
+                                          ? {
+                                              ...item,
+                                              seuilAlerte: Number(event.target.value),
+                                            }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  onBlur={(event) =>
+                                    updateArticleField(article.id, {
+                                      seuilAlerte: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                              ) : (
+                                <span className="block text-center text-slate-900">
+                                  {article.seuilAlerte}
+                                </span>
+                              )}
                             </div>
 
                             {/* Actions */}
                             {readyToManage ? (
-                              <div className="col-span-12 flex justify-end sm:col-span-1 sm:block">
+                              <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
-                                  className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
+                                  className="w-1/2 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-800 hover:bg-slate-200 disabled:opacity-50 text-center"
+                                  disabled={deletingArticleId === article.id}
+                                  onClick={() =>
+                                    setEditingArticleId((prev) =>
+                                      prev === article.id ? null : article.id,
+                                    )
+                                  }
+                                >
+                                  {editingArticleId === article.id ? "Terminer" : "Modifier"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="w-1/2 rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50 text-center"
                                   disabled={deletingArticleId === article.id}
                                   onClick={() =>
                                     handleDeleteArticle(article.id, article.nom)
@@ -868,12 +924,6 @@ export function ProductsSection() {
                               </div>
                             ) : null}
 
-                            {/* Bandeau alerte */}
-                            {inAlert ? (
-                              <div className="col-span-12 mt-1 text-[11px] font-semibold uppercase tracking-wide text-rose-600">
-                                Niveau d’alerte atteint (quantité ≤ seuil)
-                              </div>
-                            ) : null}
                           </div>
                         );
                       })}
