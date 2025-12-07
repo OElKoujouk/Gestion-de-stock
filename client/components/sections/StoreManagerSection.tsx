@@ -21,7 +21,7 @@ type Demande = {
   reference?: string | null;
   items: DemandeItem[];
   etablissement?: { id: string; nom: string };
-  agent?: { id: string; nom: string; email: string };
+  agent?: { id: string; nom: string; contactEmail?: string | null };
   createdAt?: string;
   updatedAt?: string;
 };
@@ -288,7 +288,9 @@ export function StoreManagerSection() {
                     className="flex w-full flex-wrap items-start justify-between gap-3 text-left"
                   >
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{demande.agent?.nom ?? "Agent inconnu"}</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {demande.agent?.nom ?? demande.agentNom ?? "Agent inconnu"}
+                      </p>
                       <p className="text-xs text-slate-600">{formatDemandeRef(demande)}</p>
                     </div>
                     <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusStyle[demande.statut])}>

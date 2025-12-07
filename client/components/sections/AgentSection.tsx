@@ -161,7 +161,11 @@ export function AgentSection() {
     [demandesSorted],
   );
 
-  const historyDemandes = useMemo(() => demandesSorted.slice(0, 5), [demandesSorted]);
+  // Historique: seulement les demandes cloturees (preparee/refusee)
+  const historyDemandes = useMemo(
+    () => demandesSorted.filter((demande) => demande.statut === "preparee" || demande.statut === "refusee").slice(0, 5),
+    [demandesSorted],
+  );
   const visibleInProgress = useMemo(
     () => (showAllInProgress ? inProgressDemandes : inProgressDemandes.slice(0, 3)),
     [inProgressDemandes, showAllInProgress],

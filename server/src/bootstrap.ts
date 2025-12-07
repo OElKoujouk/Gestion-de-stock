@@ -5,7 +5,7 @@ const SUPER_ADMIN_EMAIL = "admin-s";
 const SUPER_ADMIN_PASSWORD = "admin";
 
 export async function ensureSuperAdmin() {
-  const existing = await prisma.user.findUnique({ where: { email: SUPER_ADMIN_EMAIL } });
+  const existing = await prisma.user.findUnique({ where: { identifiant: SUPER_ADMIN_EMAIL } });
   if (existing) {
     return;
   }
@@ -15,7 +15,8 @@ export async function ensureSuperAdmin() {
   await prisma.user.create({
     data: {
       nom: "Super Admin",
-      email: SUPER_ADMIN_EMAIL,
+      identifiant: SUPER_ADMIN_EMAIL,
+      contactEmail: "admin-s@example.com",
       motDePasse: hashedPassword,
       role: "superadmin",
       actif: true,
@@ -23,5 +24,5 @@ export async function ensureSuperAdmin() {
     },
   });
 
-  console.log("Super-admin par défaut créé (email: admin-s / mdp: admin)");
+  console.log("Super-admin par défaut créé (identifiant: admin-s / mdp: admin)");
 }

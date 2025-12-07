@@ -11,9 +11,16 @@ export const authRouter = Router();
 authRouter.post("/login", async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
   if (!email || !password) {
-    return res.status(400).json({ message: "Email et mot de passe requis" });
+    return res.status(400).json({ message: "Email/identifiant et mot de passe requis" });
   }
-  const user = await prisma.user.findUnique({ where: { email } });
+
+  // Connexion via identifiant OU email de contact
+  const identifier = email.trim();
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [{ identifiant: identifier }, { contactEmail: identifier }],
+    },
+  });
   if (!user || !(await bcrypt.compare(password, user.motDePasse))) {
     return res.status(401).json({ message: "Identifiants invalides" });
   }
@@ -36,7 +43,7 @@ authRouter.post("/login", async (req, res) => {
       role: user.role,
       etablissement_id: user.etablissementId,
       nom: user.nom,
-      email: user.email,
+      email: user.identifiant,
     },
   });
 });
@@ -54,7 +61,8 @@ authRouter.get("/me", authMiddleware, async (req, res) => {
     select: {
       id: true,
       nom: true,
-      email: true,
+      identifiant: true,
+      contactEmail: true,
       role: true,
       etablissementId: true,
     },
@@ -62,5 +70,12 @@ authRouter.get("/me", authMiddleware, async (req, res) => {
   if (!user) {
     return res.status(404).json({ message: "Utilisateur introuvable" });
   }
-  res.json(user);
+  res.json({
+    id: user.id,
+    nom: user.nom,
+    email: user.identifiant,
+    contactEmail: user.contactEmail,
+    role: user.role,
+    etablissementId: user.etablissementId,
+  });
 });

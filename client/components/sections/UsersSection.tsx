@@ -15,7 +15,7 @@ export function UsersSection() {
   const canManageUsers = role === "superAdmin" || role === "admin";
 
   const [users, setUsers] = useState<
-    Array<{ id: string; nom: string; email: string; role: string; actif: boolean; etablissementId: string | null }>
+    Array<{ id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; actif: boolean; etablissementId: string | null }>
   >([]);
   const [establishments, setEstablishments] = useState<Array<{ id: string; nom: string }>>([]);
   const [establishmentNames, setEstablishmentNames] = useState<Record<string, string>>({});
@@ -85,7 +85,8 @@ export function UsersSection() {
         if (!q) return true;
         return (
           u.nom.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
+          u.identifiant.toLowerCase().includes(q) ||
+          (u.contactEmail ?? "").toLowerCase().includes(q) ||
           u.role.toLowerCase().includes(q)
         );
       });
@@ -192,7 +193,10 @@ export function UsersSection() {
                   <tr key={user.id} className="hover:bg-slate-50">
                     <td className="py-4 pr-6">
                       <p className="font-semibold text-slate-900">{user.nom}</p>
-                      <p className="text-xs text-slate-500">{user.email}</p>
+                      <p className="text-xs text-slate-500">
+                        {user.identifiant}
+                        {user.contactEmail ? ` · ${user.contactEmail}` : ""}
+                      </p>
                     </td>
 
                     <td className="py-4 pr-6">
@@ -253,7 +257,9 @@ export function UsersSection() {
         <CreateUserForm
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          onCreated={fetchUsers}
+          onCreated={() => {
+            void fetchUsers();
+          }}
           establishments={establishments}
           canSelectTenant={isSuperAdmin}
         />

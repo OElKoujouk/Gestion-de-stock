@@ -5,22 +5,25 @@ const express_1 = require("express");
 const prisma_1 = require("../prisma");
 exports.categoriesRouter = (0, express_1.Router)();
 exports.categoriesRouter.get("/", async (req, res) => {
+    const { etablissementId } = req.query;
+    const where = req.tenantId ? { etablissementId: req.tenantId } : etablissementId ? { etablissementId: String(etablissementId) } : undefined;
     const categories = await prisma_1.prisma.category.findMany({
-        where: req.tenantId ? { etablissementId: req.tenantId } : undefined,
+        where,
         orderBy: { nom: "asc" },
     });
     res.json(categories);
 });
 exports.categoriesRouter.post("/", async (req, res) => {
-    if (!req.tenantId)
-        return res.status(400).json({ message: "Tenant requis" });
-    const { nom } = req.body;
+    const { nom, etablissementId } = req.body;
     if (!nom)
         return res.status(400).json({ message: "Nom requis" });
+    const tenantId = req.tenantId ?? etablissementId;
+    if (!tenantId)
+        return res.status(400).json({ message: "Tenant requis" });
     const category = await prisma_1.prisma.category.create({
         data: {
             nom,
-            etablissementId: req.tenantId,
+            etablissementId: tenantId,
         },
     });
     res.status(201).json(category);

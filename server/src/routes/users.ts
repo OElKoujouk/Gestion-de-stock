@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { allowRoles } from "../middleware/role";
 
@@ -15,7 +16,8 @@ usersRouter.get("/", async (req, res) => {
     select: {
       id: true,
       nom: true,
-      email: true,
+      identifiant: true,
+      contactEmail: true,
       role: true,
       actif: true,
       etablissementId: true,
@@ -26,30 +28,52 @@ usersRouter.get("/", async (req, res) => {
 });
 
 usersRouter.post("/", async (req, res) => {
-  const { nom, email, motDePasse, role, actif, etablissementId } = req.body as {
+  const { nom, identifiant, contactEmail, motDePasse, role, actif, etablissementId } = req.body as {
     nom?: string;
-    email?: string;
+    identifiant?: string;
+    contactEmail?: string | null;
     motDePasse?: string;
     role?: string;
     actif?: boolean;
     etablissementId?: string | null;
   };
-  if (!nom || !email || !motDePasse || !role) {
+  if (!nom || !identifiant || !motDePasse || !role) {
     return res.status(400).json({ message: "Champs requis manquants" });
   }
   const hashedPassword = await bcrypt.hash(motDePasse, 10);
   const assignedTenant = req.tenantId ?? etablissementId ?? null;
-  const user = await prisma.user.create({
-    data: {
-      nom,
-      email,
-      motDePasse: hashedPassword,
-      role: role as any,
-      actif: actif ?? true,
-      etablissementId: assignedTenant,
-    },
-  });
-  res.status(201).json({ id: user.id, nom: user.nom, email: user.email, role: user.role, etablissementId: user.etablissementId });
+  if ((role === "admin" || role === "responsable") && !assignedTenant) {
+    return res.status(400).json({ message: "Un etablissement est requis pour ce role" });
+  }
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        nom,
+        identifiant,
+        contactEmail: contactEmail ?? null,
+        motDePasse: hashedPassword,
+        role: role as any,
+        actif: actif ?? true,
+        etablissementId: assignedTenant,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return res.status(409).json({ message: "Identifiant deja utilise" });
+    }
+    throw error;
+  }
+  res
+    .status(201)
+    .json({
+      id: user.id,
+      nom: user.nom,
+      identifiant: user.identifiant,
+      contactEmail: user.contactEmail,
+      role: user.role,
+      etablissementId: user.etablissementId,
+    });
 });
 
 usersRouter.put("/:id", async (req, res) => {
@@ -58,22 +82,24 @@ usersRouter.put("/:id", async (req, res) => {
   });
   if (!existing) return res.status(404).json({ message: "Utilisateur introuvable" });
 
-  const { nom, email, role, actif, motDePasse, etablissementId } = req.body as {
+  const { nom, identifiant, contactEmail, role, actif, motDePasse, etablissementId } = req.body as {
     nom?: string;
-    email?: string;
+    identifiant?: string;
+    contactEmail?: string | null;
     role?: string;
     actif?: boolean;
     motDePasse?: string;
     etablissementId?: string | null;
   };
 
-  if (!nom || !email || !role) {
-    return res.status(400).json({ message: "Nom, email et rôle sont obligatoires" });
+  if (!nom || !identifiant || !role) {
+    return res.status(400).json({ message: "Nom, identifiant et rôle sont obligatoires" });
   }
 
   const data: any = {
     nom,
-    email,
+    identifiant,
+    contactEmail: typeof contactEmail === "undefined" ? existing.contactEmail : contactEmail ?? null,
     role,
   };
 
@@ -86,7 +112,11 @@ usersRouter.put("/:id", async (req, res) => {
   }
 
   if (!req.tenantId) {
-    data.etablissementId = typeof etablissementId === "undefined" ? existing.etablissementId : etablissementId ?? null;
+    const assignedTenant = typeof etablissementId === "undefined" ? existing.etablissementId : etablissementId ?? null;
+    if ((role === "admin" || role === "responsable") && !assignedTenant) {
+      return res.status(400).json({ message: "Un etablissement est requis pour ce role" });
+    }
+    data.etablissementId = assignedTenant;
   }
 
   const user = await prisma.user.update({
@@ -97,7 +127,8 @@ usersRouter.put("/:id", async (req, res) => {
   res.json({
     id: user.id,
     nom: user.nom,
-    email: user.email,
+    identifiant: user.identifiant,
+    contactEmail: user.contactEmail,
     role: user.role,
     actif: user.actif,
     etablissementId: user.etablissementId,
@@ -121,6 +152,45 @@ usersRouter.delete("/:id", async (req, res) => {
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
   });
   if (!existing) return res.status(404).json({ message: "Utilisateur introuvable" });
-  await prisma.user.delete({ where: { id: existing.id } });
+
+  const tenantFilter = req.tenantId ? { etablissementId: req.tenantId } : {};
+
+  await prisma.$transaction(async (tx) => {
+    // Sauvegarder le nom/email sur les demandes avant de détacher/supprimer (raw pour eviter les soucis de client genere)
+    if (!req.tenantId) {
+      await tx.$executeRawUnsafe("UPDATE demandes SET agent_nom = ?, agent_email = ? WHERE agent_id = ?", existing.nom, existing.contactEmail, existing.id);
+    } else {
+      await tx.$executeRawUnsafe(
+        "UPDATE demandes SET agent_nom = ?, agent_email = ? WHERE agent_id = ? AND etablissement_id = ?",
+        existing.nom,
+        existing.contactEmail,
+        existing.id,
+        req.tenantId,
+      );
+    }
+
+    // Supprimer les demandes en cours (en_attente, modifiee) + leurs items
+    const pendingDemandes = await tx.demande.findMany({
+      where: { agentId: existing.id, statut: { in: ["en_attente", "modifiee"] }, ...tenantFilter },
+      select: { id: true },
+    });
+    const pendingIds = pendingDemandes.map((d) => d.id);
+    if (pendingIds.length > 0) {
+      await tx.demandeItem.deleteMany({ where: { demandeId: { in: pendingIds } } });
+      await tx.demande.deleteMany({ where: { id: { in: pendingIds } } });
+    }
+
+    // Détacher les demandes historisées pour conserver la trace
+    // (raw SQL pour éviter les problèmes de génération de client lors du changement de nullabilité)
+    if (!req.tenantId) {
+      await tx.$executeRawUnsafe("UPDATE demandes SET agent_id = NULL WHERE agent_id = ?", existing.id);
+    } else {
+      await tx.$executeRawUnsafe("UPDATE demandes SET agent_id = NULL WHERE agent_id = ? AND etablissement_id = ?", existing.id, req.tenantId);
+    }
+
+    // Supprimer l'utilisateur
+    await tx.user.delete({ where: { id: existing.id } });
+  });
+
   res.status(204).send();
 });

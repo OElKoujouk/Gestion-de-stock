@@ -18,7 +18,15 @@ type Establishment = {
   codePostal: string | null;
   ville: string | null;
 };
-type UserSummary = { id: string; nom: string; email: string; role: string; etablissementId: string | null; actif: boolean };
+type UserSummary = {
+  id: string;
+  nom: string;
+  identifiant: string;
+  contactEmail: string | null;
+  role: string;
+  etablissementId: string | null;
+  actif: boolean;
+};
 type ArticleSummary = {
   id: string;
   nom: string;
@@ -86,7 +94,17 @@ export function AdminEstablishmentSection() {
     setUsersLoading(true);
     try {
       const data = await api.getUsers();
-      setUsers(data);
+      setUsers(
+        data.map((u) => ({
+          id: u.id,
+          nom: u.nom,
+          identifiant: u.identifiant,
+          contactEmail: u.contactEmail ?? null,
+          role: u.role,
+          etablissementId: u.etablissementId,
+          actif: u.actif,
+        })),
+      );
       setUsersError(null);
     } catch (err) {
       setUsersError(err instanceof Error ? err.message : "Impossible de charger les utilisateurs");
@@ -278,10 +296,11 @@ export function AdminEstablishmentSection() {
     }
   };
 
-  const handleUserCreated = (user: { id: string; nom: string; email: string; role: string; etablissementId: string | null }) => {
+  const handleUserCreated = (user: { id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; etablissementId: string | null }) => {
     setUserDialogOpen(false);
     void fetchUsers();
-    setToast({ message: `Role cree : ${user.nom} (${user.email}) en ${ROLE_LABELS[user.role] ?? user.role}`, type: "success" });
+    const contact = user.contactEmail ? ` · ${user.contactEmail}` : "";
+    setToast({ message: `Role cree : ${user.nom} (${user.identifiant}${contact}) en ${ROLE_LABELS[user.role] ?? user.role}`, type: "success" });
   };
 
   const handleOpenEdit = (user: UserSummary) => {
@@ -306,8 +325,9 @@ export function AdminEstablishmentSection() {
       await fetchUsers();
       setToast({ message: `Utilisateur supprime : ${user.nom}`, type: "success" });
     } catch (err) {
-      setUsersError(err instanceof Error ? err.message : "Impossible de supprimer l'utilisateur");
-      setToast({ message: "Erreur lors de la suppression", type: "error" });
+      const msg = err instanceof Error ? err.message : "Impossible de supprimer l'utilisateur";
+      setUsersError(msg);
+      setToast({ message: msg, type: "error" });
     } finally {
       setDeletingUserId(null);
     }
@@ -568,10 +588,13 @@ export function AdminEstablishmentSection() {
                       const isSelf = currentUserId === user.id;
                       return (
                         <div key={user.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                          <div>
-                            <p className="font-semibold text-slate-900">{user.nom}</p>
-                            <p className="text-xs text-slate-500">{user.email}</p>
-                          </div>
+                        <div>
+                          <p className="font-semibold text-slate-900">{user.nom}</p>
+                          <p className="text-xs text-slate-500">
+                            {user.identifiant}
+                            {user.contactEmail ? ` · ${user.contactEmail}` : ""}
+                          </p>
+                        </div>
                           <div className="flex items-center gap-3">
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                               {ROLE_LABELS[user.role] ?? user.role}

@@ -34,10 +34,23 @@ demandesRouter.post("/", allowRoles("agent", "responsable", "admin"), async (req
     return res.status(500).json({ message: "Generation de reference impossible" });
   }
 
+  const agent = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { id: true, nom: true, contactEmail: true, etablissementId: true },
+  });
+  if (!agent) {
+    return res.status(401).json({ message: "Utilisateur introuvable" });
+  }
+  if (agent.etablissementId !== req.tenantId) {
+    return res.status(403).json({ message: "Utilisateur non rattache a cet etablissement" });
+  }
+
   const demande = await prisma.demande.create({
     data: {
       etablissementId: req.tenantId,
-      agentId: req.user.id,
+      agentId: agent.id,
+      agentNom: agent?.nom ?? null,
+      agentEmail: agent?.contactEmail ?? null,
       statut: "en_attente",
       reference,
       items: {
@@ -75,7 +88,11 @@ demandesRouter.get("/", allowRoles("superadmin", "agent", "responsable", "admin"
 
   const demandes = await prisma.demande.findMany({
     where,
-    include: { items: true, agent: { select: { id: true, nom: true, email: true } } },
+    include: {
+      items: true,
+      agent: { select: { id: true, nom: true, contactEmail: true } },
+      etablissement: { select: { id: true, nom: true } },
+    },
   });
   res.json(demandes);
 });
@@ -83,7 +100,11 @@ demandesRouter.get("/", allowRoles("superadmin", "agent", "responsable", "admin"
 demandesRouter.get("/:id", allowRoles("superadmin", "agent", "responsable", "admin"), async (req, res) => {
   const demande = await prisma.demande.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
-    include: { items: true, agent: { select: { id: true, nom: true, email: true } } },
+    include: {
+      items: true,
+      agent: { select: { id: true, nom: true, contactEmail: true } },
+      etablissement: { select: { id: true, nom: true } },
+    },
   });
   if (!demande) return res.status(404).json({ message: "Demande introuvable" });
   res.json(demande);
@@ -93,7 +114,11 @@ demandesRouter.get("/toutes", allowRoles("responsable", "admin"), async (req, re
   if (!req.tenantId) return res.status(400).json({ message: "Tenant requis" });
   const demandes = await prisma.demande.findMany({
     where: { etablissementId: req.tenantId },
-    include: { items: true, agent: { select: { id: true, nom: true, email: true } } },
+    include: {
+      items: true,
+      agent: { select: { id: true, nom: true, contactEmail: true } },
+      etablissement: { select: { id: true, nom: true } },
+    },
   });
   res.json(demandes);
 });

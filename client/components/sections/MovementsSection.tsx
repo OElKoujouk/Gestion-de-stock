@@ -22,7 +22,9 @@ type Demande = {
   statut: DemandeStatus;
   reference?: string | null;
   items: DemandeItem[];
-  agent?: { id: string; nom: string; email: string };
+  agent?: { id: string; nom: string; contactEmail?: string | null };
+  agentNom?: string | null;
+  agentEmail?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -128,8 +130,7 @@ export function MovementsSection() {
   const agentOptions = useMemo(() => {
     const map = new Map<string, string>();
     mouvements.forEach((d) => {
-      if (d.agent)
-        map.set(d.agent.id, d.agent.nom ?? d.agent.email ?? "Agent");
+      if (d.agent) map.set(d.agent.id, d.agent.nom ?? d.agent.contactEmail ?? "Agent");
     });
     return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
   }, [mouvements]);
@@ -293,7 +294,7 @@ export function MovementsSection() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-slate-900">
-                          {d.agent?.nom ?? "Agent inconnu"}
+                          {d.agent?.nom ?? d.agentNom ?? "Agent inconnu"}
                         </p>
                         <p className="text-xs text-slate-600">
                           {formatDemandeRef(d)}

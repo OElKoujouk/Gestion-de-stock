@@ -139,7 +139,7 @@ export const api = {
         id: string;
         statut: "en_attente" | "preparee" | "modifiee" | "refusee";
         items: Array<{ id: string; articleId: string; quantiteDemandee: number; quantitePreparee: number }>;
-        agent?: { id: string; nom: string; email: string };
+        agent?: { id: string; nom: string; contactEmail?: string | null };
         createdAt?: string;
         updatedAt?: string;
       }>
@@ -194,14 +194,39 @@ export const api = {
       method: "DELETE",
     }),
   getUsers: () =>
-    request<Array<{ id: string; nom: string; email: string; role: string; etablissementId: string | null; actif: boolean }>>("/users"),
-  createUser: (payload: { nom: string; email: string; motDePasse: string; role: string; etablissementId?: string | null }) =>
-    request<{ id: string; nom: string; email: string; role: string; etablissementId: string | null }>("/users", {
+    request<
+      Array<{
+        id: string;
+        nom: string;
+        identifiant: string;
+        contactEmail?: string | null;
+        role: string;
+        etablissementId: string | null;
+        actif: boolean;
+      }>
+    >("/users"),
+  createUser: (payload: {
+    nom: string;
+    identifiant: string;
+    contactEmail?: string | null;
+    motDePasse: string;
+    role: string;
+    etablissementId?: string | null;
+  }) =>
+    request<{ id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; etablissementId: string | null }>("/users", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  updateUser: (id: string, payload: { nom: string; email: string; role: string; actif: boolean; etablissementId?: string | null }) =>
-    request<{ id: string; nom: string; email: string; role: string; etablissementId: string | null; actif: boolean }>(`/users/${id}`, {
+  updateUser: (id: string, payload: { nom: string; identifiant: string; contactEmail?: string | null; role: string; actif: boolean; etablissementId?: string | null }) =>
+    request<{
+      id: string;
+      nom: string;
+      identifiant: string;
+      contactEmail?: string | null;
+      role: string;
+      etablissementId: string | null;
+      actif: boolean;
+    }>(`/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),

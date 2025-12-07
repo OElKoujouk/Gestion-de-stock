@@ -54,7 +54,8 @@ model User {
   etablissementId String?  @map("etablissement_id")
   etablissement   Establishment? @relation(fields: [etablissementId], references: [id])
   nom             String
-  email           String   @unique
+  identifiant     String   @unique
+  contactEmail    String?  @map("contact_email")
   motDePasse      String   @map("mot_de_passe")
   role            Role
   actif           Boolean  @default(true)
@@ -123,8 +124,10 @@ model Demande {
   id              String   @id @default(cuid())
   etablissementId String   @map("etablissement_id")
   etablissement   Establishment @relation(fields: [etablissementId], references: [id])
-  agentId         String   @map("agent_id")
-  agent           User     @relation("AgentDemandes", fields: [agentId], references: [id])
+  agentId         String?  @map("agent_id")
+  agent           User?    @relation("AgentDemandes", fields: [agentId], references: [id])
+  agentNom        String?  @map("agent_nom")
+  agentEmail      String?  @map("agent_email")
   statut          DemandeStatut
   reference       String?  @unique
   items           DemandeItem[]

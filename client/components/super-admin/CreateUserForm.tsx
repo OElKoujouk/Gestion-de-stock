@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: (user: { id: string; nom: string; email: string; role: string; etablissementId: string | null }) => void;
+  onCreated: (user: { id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; etablissementId: string | null }) => void;
   establishments: Array<{ id: string; nom: string }>;
   canSelectTenant: boolean;
   forcedTenantId?: string | null;
@@ -22,13 +22,13 @@ export function CreateUserForm({
   forcedTenantId,
   forcedTenantLabel,
 }: Props) {
-  const [form, setForm] = useState({ nom: "", email: "", motDePasse: "", role: "responsable", etablissementId: "" });
+  const [form, setForm] = useState({ nom: "", identifiant: "", email: "", motDePasse: "", role: "responsable", etablissementId: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) {
-      setForm({ nom: "", email: "", motDePasse: "", role: "responsable", etablissementId: "" });
+      setForm({ nom: "", identifiant: "", email: "", motDePasse: "", role: "responsable", etablissementId: "" });
       setError(null);
       setLoading(false);
     }
@@ -52,7 +52,8 @@ export function CreateUserForm({
     try {
       const created = await api.createUser({
         nom: form.nom,
-        email: form.email,
+        identifiant: form.identifiant || form.email,
+        contactEmail: form.email || null,
         motDePasse: form.motDePasse,
         role: form.role,
         etablissementId:
@@ -93,10 +94,19 @@ export function CreateUserForm({
               Identifiant
               <input
                 type="text"
+                value={form.identifiant}
+                onChange={(e) => setForm((f) => ({ ...f, identifiant: e.target.value }))}
+                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                required
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-800">
+              Email (contact)
+              <input
+                type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                required
               />
             </label>
             <label className="text-sm font-semibold text-slate-800">
