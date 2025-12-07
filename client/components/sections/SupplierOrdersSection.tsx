@@ -65,6 +65,7 @@ export function SupplierOrdersSection() {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [editingItems, setEditingItems] = useState<Record<string, number>>({});
   const [expandedOrders, setExpandedOrders] = useState<string[]>([]);
+  const [modifiedOrders, setModifiedOrders] = useState<Set<string>>(new Set());
 
   /* ───────────── Fetch données ───────────── */
 
@@ -333,6 +334,9 @@ export function SupplierOrdersSection() {
   /* ───────────── Commandes (édition / statut) ───────────── */
 
   const handleMarkReceived = async (orderId: string) => {
+    if (!window.confirm("Êtes-vous sûr de valider la réception de cette commande ?")) {
+      return;
+    }
     try {
       const updated = await api.updateSupplierOrder(orderId, { statut: "recue" });
       setOrders((prev) =>
@@ -372,6 +376,7 @@ export function SupplierOrdersSection() {
       setOrders((prev) =>
         prev.map((o) => (o.id === order.id ? { ...o, ...updated } : o)),
       );
+      setModifiedOrders((prev) => new Set(prev).add(order.id));
       setEditingOrderId(null);
       setEditingItems({});
       setSubmitMessage("Commande mise à jour.");
@@ -547,15 +552,15 @@ export function SupplierOrdersSection() {
               title="Articles du stock"
               subtitle="Choisissez les quantités à commander"
               action={
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="search"
-                    placeholder="Rechercher un produit ou une référence"
-                    className="w-56 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                  />
+                <div className="flex flex-wrap items-center gap-3">
                   <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="search"
+                      placeholder="Rechercher un produit ou une référence"
+                      className="w-64 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
                     <button
                       type="button"
                       className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
@@ -563,15 +568,15 @@ export function SupplierOrdersSection() {
                     >
                       Effacer les quantités
                     </button>
-                    <button
-                      type="button"
-                      className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
-                      onClick={handleCreateOrder}
-                      disabled={!canSubmitOrders || submitting}
-                    >
-                      {submitting ? "Création..." : "Créer la commande fournisseur"}
-                    </button>
                   </div>
+                  <button
+                    type="button"
+                    className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
+                    onClick={handleCreateOrder}
+                    disabled={!canSubmitOrders || submitting}
+                  >
+                    {submitting ? "Création..." : "Créer la commande fournisseur"}
+                  </button>
                 </div>
               }
             />
@@ -587,7 +592,7 @@ export function SupplierOrdersSection() {
               </p>
             ) : (
               <div className="divide-y divide-slate-100 text-sm">
-                <div className="grid items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
+                <div className="grid items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid-cols-[1.5fr_minmax(0,1fr)] sm:text-xs">
                   <div className="sm:flex sm:items-center sm:gap-2">
                     <span>Produit</span>
                   </div>
@@ -717,6 +722,11 @@ export function SupplierOrdersSection() {
                             </p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
+                            {modifiedOrders.has(order.id) ? (
+                              <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                                Modifiée
+                              </span>
+                            ) : null}
                             <button
                               type="button"
                               className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
@@ -868,6 +878,11 @@ export function SupplierOrdersSection() {
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                          {modifiedOrders.has(order.id) ? (
+                            <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                              Modifiée avant validation
+                            </span>
+                          ) : null}
                           <button
                             type="button"
                             className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
