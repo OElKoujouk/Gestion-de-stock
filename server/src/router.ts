@@ -8,6 +8,7 @@ import { movementsRouter } from "./routes/movements";
 import { usersRouter } from "./routes/users";
 import { demandesRouter } from "./routes/demandes";
 import { supplierOrdersRouter } from "./routes/supplierOrders";
+import { suppliersRouter } from "./routes/suppliers";
 
 export function apiRouter(authMiddleware: RequestHandler, tenantMiddleware: RequestHandler) {
   const router = Router();
@@ -23,6 +24,7 @@ export function apiRouter(authMiddleware: RequestHandler, tenantMiddleware: Requ
   router.use("/mouvements", movementsRouter);
   router.use("/users", usersRouter);
   router.use("/demandes", demandesRouter);
+  router.use("/fournisseurs", suppliersRouter);
   router.use("/fournisseurs/commandes", supplierOrdersRouter);
 
   return router;

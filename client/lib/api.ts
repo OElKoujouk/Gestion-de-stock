@@ -260,6 +260,51 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  createSupplierOrder: (payload: { fournisseur: string; items: Array<{ articleId: string; quantite: number }> }) =>
+    request<{
+      id: string;
+      fournisseur: string;
+      statut: string;
+      etablissementId: string;
+      supplierId?: string | null;
+      supplier?: { id: string; nom: string; adresse: string | null };
+      items: Array<{ id: string; articleId: string; quantite: number }>;
+    }>("/fournisseurs/commandes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getSupplierOrders: () =>
+    request<
+      Array<{
+        id: string;
+      fournisseur: string;
+      statut: "en_cours" | "recue";
+      createdAt?: string;
+      updatedAt?: string;
+      supplierId?: string | null;
+      supplier?: { id: string; nom: string; adresse: string | null };
+      items: Array<{ id: string; articleId: string; quantite: number }>;
+    }>
+    >("/fournisseurs/commandes"),
+  updateSupplierOrder: (id: string, payload: { statut?: "en_cours" | "recue"; items?: Array<{ articleId: string; quantite: number }> }) =>
+    request<{
+      id: string;
+      fournisseur: string;
+      statut: "en_cours" | "recue";
+      supplierId?: string | null;
+      supplier?: { id: string; nom: string; adresse: string | null };
+      items: Array<{ id: string; articleId: string; quantite: number }>;
+    }>(`/fournisseurs/commandes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  getSuppliers: () =>
+    request<Array<{ id: string; nom: string; adresse: string | null }>>("/fournisseurs"),
+  createSupplier: (payload: { nom: string; adresse?: string | null }) =>
+    request<{ id: string; nom: string; adresse: string | null }>("/fournisseurs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   deleteUser: (id: string) =>
     request<void>(`/users/${id}`, {
       method: "DELETE",

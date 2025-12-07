@@ -43,6 +43,7 @@ model Establishment {
   mouvements     Movement[]
   demandes       Demande[]
   supplierOrders SupplierOrder[]
+  suppliers      Supplier[]
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
@@ -158,6 +159,8 @@ model SupplierOrder {
   id              String              @id @default(cuid())
   etablissementId String              @map("etablissement_id")
   etablissement   Establishment       @relation(fields: [etablissementId], references: [id])
+  supplierId      String?             @map("supplier_id")
+  supplier        Supplier?           @relation(fields: [supplierId], references: [id])
   fournisseur     String
   statut          SupplierOrderStatus
   items           SupplierOrderItem[]
@@ -165,6 +168,7 @@ model SupplierOrder {
   updatedAt       DateTime            @updatedAt @map("updated_at")
 
   @@index([etablissementId])
+  @@index([supplierId])
   @@map("commandes_fournisseurs")
 }
 
@@ -179,4 +183,18 @@ model SupplierOrderItem {
   @@index([commandeId])
   @@index([articleId])
   @@map("commande_items")
+}
+
+model Supplier {
+  id              String          @id @default(cuid())
+  etablissementId String          @map("etablissement_id")
+  etablissement   Establishment   @relation(fields: [etablissementId], references: [id])
+  nom             String
+  adresse         String?
+  commandes       SupplierOrder[]
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([etablissementId])
+  @@map("suppliers")
 }
