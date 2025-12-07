@@ -398,7 +398,7 @@ export function AdminEstablishmentSection() {
         .join("\n")
         .slice(0, 700) || "Inventaire vide.";
     const body = encodeURIComponent(
-      `Bonjour,\n\nVous trouverez ci-dessous un extrait de l'inventaire pour ${selectedEtablissement.nom}.\n\n${summary}\n\nNombre total d'articles: ${filteredArticles.length}\n\n-- Console Gestion de stock`,
+      `Bonjour,\n\nVous trouverez ci-dessous un extrait de l'inventaire pour ${selectedEtablissement.nom}.\n\n${summary}\n\n-- Console Gestion de stock`,
     );
     window.location.href = `mailto:${encodeURIComponent(emailRecipient)}?subject=${subject}&body=${body}`;
   };

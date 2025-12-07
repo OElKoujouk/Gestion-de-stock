@@ -292,8 +292,10 @@ export function StoreManagerSection() {
                       <p className="text-sm font-semibold text-slate-900">
                         {demande.agent?.nom ?? demande.agentNom ?? "Agent inconnu"}
                       </p>
-                      <p className="text-xs text-slate-600">{formatDemandeRef(demande)}</p>
-                    </div>
+                      <p className="text-xs text-slate-600">
+                        {demande.createdAt ? dateFormatter.format(new Date(demande.createdAt)) : "Date inconnue"}
+                      </p>
+                  </div>
                     <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusStyle[demande.statut])}>
                       {statusLabel[demande.statut]}
                     </span>
@@ -301,45 +303,36 @@ export function StoreManagerSection() {
 
                   {isExpanded ? (
                     <>
-                      <div className="mt-3 space-y-2">
+                      <ul className="mt-3 space-y-3 list-disc pl-5 text-sm text-slate-900">
                         {demande.items.map((item) => {
                           const article = articleIndex.get(item.articleId);
                           const value = quantityEdits[item.id] ?? item.quantitePreparee ?? item.quantiteDemandee;
                           const stock = article?.quantite ?? 0;
                           return (
-                            <div
-                              key={item.id}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-3 py-2"
-                            >
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{article?.nom ?? "Article"}</p>
-                                <p className="text-xs text-slate-500">Demandee: {item.quantiteDemandee}</p>
-                                <p className="text-[11px] text-slate-500">Stock dispo: {stock}</p>
+                            <li key={item.id} className="space-y-1">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <span className="font-semibold">{article?.nom ?? "Article"}</span>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={value}
+                                    onChange={(event) => handleQuantityChange(item.id, Number(event.target.value))}
+                                    disabled={!isEditable}
+                                    className={cn(
+                                      "h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100",
+                                      !isEditable && "bg-slate-50 text-slate-500",
+                                    )}
+                                  />
+                                  <span className="text-xs text-slate-500">A preparer</span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={value}
-                                  onChange={(event) => handleQuantityChange(item.id, Number(event.target.value))}
-                                  disabled={!isEditable}
-                                  className={cn(
-                                    "h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100",
-                                    !isEditable && "bg-slate-50 text-slate-500",
-                                  )}
-                                />
-                                <span className="text-xs text-slate-500">A preparer</span>
-                              </div>
-                            </div>
+                              <p className="text-xs text-slate-500">Demandee: {item.quantiteDemandee}</p>
+                              <p className="text-[11px] text-slate-500">Stock dispo: {stock}</p>
+                            </li>
                           );
                         })}
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                        <span className="rounded-full bg-white px-2 py-1">{formatDemandeRef(demande)}</span>
-                        <span className="rounded-full bg-white px-2 py-1">{formatItems(demande.items)}</span>
-                        <span className="rounded-full bg-white px-2 py-1">{demandeLabel(demande)}</span>
-                      </div>
+                      </ul>
 
                       {isEditable ? (
                         <div className="mt-3 flex flex-wrap gap-2">

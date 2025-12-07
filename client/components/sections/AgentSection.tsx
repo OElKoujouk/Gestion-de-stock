@@ -413,7 +413,6 @@ export function AgentSection() {
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
-                      <p className="text-xs text-amber-800">Commande interne uniquement</p>
                     </div>
                     <button
                       type="button"
@@ -480,9 +479,6 @@ export function AgentSection() {
                         )}
                       </ul>
                       <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-                        <span className="rounded-full bg-white px-2 py-1">
-                          {demande.updatedAt ? dateFormatter.format(new Date(demande.updatedAt)) : "Date inconnue"}
-                        </span>
                         {demande.statut === "en_attente" ? (
                           <button
                             type="button"

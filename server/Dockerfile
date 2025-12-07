@@ -10,8 +10,6 @@ RUN npm ci
 
 COPY . .
 
-# Rendre le script wait-for-it exécutable
-COPY ../scripts/wait-for-it.sh ./scripts/wait-for-it.sh
 RUN chmod +x ./scripts/wait-for-it.sh
 
 # Générer Prisma client et builder l'app
