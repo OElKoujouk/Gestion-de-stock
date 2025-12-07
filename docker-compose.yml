@@ -11,12 +11,14 @@ services:
       - "3307:3306"
 
   server:
-    image: node:20-alpine
+    build:
+      context: ./server
     working_dir: /app
-    command: sh -c "npm install && npx prisma generate && HOST=0.0.0.0 npm run dev"
+    command: sh -c "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate deploy && HOST=0.0.0.0 npm run dev"
     volumes:
       - ./server:/app
       - server_node_modules:/app/node_modules
+      - ./scripts/wait-for-it.sh:/app/scripts/wait-for-it.sh
     environment:
       DATABASE_URL: mysql://root:root@db:3306/gestion_stock
       PORT: 4000
@@ -28,7 +30,8 @@ services:
       - "4000:4000"
 
   client:
-    image: node:20-alpine
+    build:
+      context: ./client
     working_dir: /app
     command: sh -c "npm install && HOST=0.0.0.0 npm run dev"
     volumes:

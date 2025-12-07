@@ -22,6 +22,7 @@ type Demande = {
   items: DemandeItem[];
   etablissement?: { id: string; nom: string };
   agent?: { id: string; nom: string; contactEmail?: string | null };
+  agentNom?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

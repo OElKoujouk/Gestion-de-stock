@@ -2,17 +2,22 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-ARG DATABASE_URL="mysql://root:root@db:3306/gestion_stock"
-ENV DATABASE_URL=${DATABASE_URL}
+# Installer bash pour wait-for-it.sh
+RUN apk add --no-cache bash
 
 COPY package*.json ./
 RUN npm ci
 
 COPY . .
 
+# Rendre le script wait-for-it exécutable
+COPY ../scripts/wait-for-it.sh ./scripts/wait-for-it.sh
+RUN chmod +x ./scripts/wait-for-it.sh
+
+# Générer Prisma client et builder l'app
 RUN npx prisma generate
 RUN npm run build
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "until npx prisma migrate deploy; do echo 'Waiting for database...'; sleep 2; done; npm run start"]
+CMD ["sh", "-c", "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate deploy && npm run start"]
