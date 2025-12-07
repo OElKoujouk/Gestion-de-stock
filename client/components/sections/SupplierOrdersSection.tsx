@@ -296,7 +296,6 @@ export function SupplierOrdersSection() {
           supplierId: created.supplierId,
           supplier: created.supplier,
           statut: "en_cours",
-          createdAt: created.createdAt,
           items: created.items,
         },
         ...prev,
