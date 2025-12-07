@@ -13,6 +13,7 @@ COPY . .
 RUN chmod +x ./scripts/wait-for-it.sh
 
 # Générer Prisma client et builder l'app
+ENV DATABASE_URL=mysql://root:root@db:3306/gestion_stock
 RUN npx prisma generate
 RUN npm run build
 
