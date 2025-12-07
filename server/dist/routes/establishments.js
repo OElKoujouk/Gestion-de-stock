@@ -61,6 +61,7 @@ exports.establishmentsRouter.delete("/:id", async (req, res) => {
             await tx.demande.deleteMany({ where: { etablissementId: id } });
             await tx.supplierOrderItem.deleteMany({ where: { commande: { etablissementId: id } } });
             await tx.supplierOrder.deleteMany({ where: { etablissementId: id } });
+            await tx.supplier.deleteMany({ where: { etablissementId: id } });
             await tx.movement.deleteMany({ where: { etablissementId: id } });
             await tx.article.deleteMany({ where: { etablissementId: id } });
             await tx.category.deleteMany({ where: { etablissementId: id } });

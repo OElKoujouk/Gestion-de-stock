@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.articlesRouter = void 0;
 const express_1 = require("express");
 const prisma_1 = require("../prisma");
+const permissions_1 = require("../middleware/permissions");
 exports.articlesRouter = (0, express_1.Router)();
 exports.articlesRouter.get("/", async (req, res) => {
     const { categorie, reference_fournisseur, nom, etablissementId } = req.query;
@@ -28,7 +29,7 @@ exports.articlesRouter.get("/", async (req, res) => {
     });
     res.json(articles);
 });
-exports.articlesRouter.post("/", async (req, res) => {
+exports.articlesRouter.post("/", (0, permissions_1.requireAbility)("manageProducts"), async (req, res) => {
     const { nom, categorieId, quantite, referenceFournisseur, seuilAlerte, description, conditionnement, etablissementId } = req.body;
     if (!nom || quantite === undefined || seuilAlerte === undefined) {
         return res.status(400).json({ message: "Champs requis manquants" });
@@ -61,7 +62,7 @@ exports.articlesRouter.get("/:id", async (req, res) => {
     }
     res.json(article);
 });
-exports.articlesRouter.put("/:id", async (req, res) => {
+exports.articlesRouter.put("/:id", (0, permissions_1.requireAbility)("manageProducts"), async (req, res) => {
     const existing = await prisma_1.prisma.article.findFirst({
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
     });
@@ -91,7 +92,7 @@ exports.articlesRouter.put("/:id", async (req, res) => {
     });
     res.json(article);
 });
-exports.articlesRouter.delete("/:id", async (req, res) => {
+exports.articlesRouter.delete("/:id", (0, permissions_1.requireAbility)("manageProducts"), async (req, res) => {
     const existing = await prisma_1.prisma.article.findFirst({
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
     });
@@ -106,7 +107,7 @@ exports.articlesRouter.delete("/:id", async (req, res) => {
     ]);
     res.status(204).send();
 });
-exports.articlesRouter.patch("/:id/stock", async (req, res) => {
+exports.articlesRouter.patch("/:id/stock", (0, permissions_1.requireAbility)("manageProducts"), async (req, res) => {
     const existing = await prisma_1.prisma.article.findFirst({
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
     });

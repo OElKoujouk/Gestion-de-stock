@@ -17,6 +17,10 @@ ENV DATABASE_URL=mysql://root:root@db:3306/gestion_stock
 RUN npx prisma generate
 RUN npm run build
 
+# Ne conserver que les dépendances nécessaires à l'exécution
+ENV NODE_ENV=production
+RUN npm prune --omit=dev
+
 EXPOSE 4000
 
 CMD ["sh", "-c", "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate deploy && npm run start"]

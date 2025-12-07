@@ -13,16 +13,11 @@ services:
   server:
     build:
       context: ./server
-    working_dir: /app
-    command: bash -c "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate deploy && HOST=0.0.0.0 npm run dev"
-    volumes:
-      - ./server:/app
-      - server_node_modules:/app/node_modules
+    command: sh -c "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate deploy && npm run start"
     environment:
+      NODE_ENV: production
       DATABASE_URL: mysql://root:root@db:3306/gestion_stock
       PORT: 4000
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "500"
     depends_on:
       - db
     ports:
@@ -31,15 +26,12 @@ services:
   client:
     build:
       context: ./client
-    working_dir: /app
-    command: sh -c "npm install && HOST=0.0.0.0 npm run dev"
-    volumes:
-      - ./client:/app
-      - client_node_modules:/app/node_modules
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    command: sh -c "npm run start -- -H 0.0.0.0 -p 3000"
     environment:
+      NODE_ENV: production
       NEXT_PUBLIC_API_URL: /api
-      TURBOPACK_WATCH_POLLING: "true"
-      TURBOPACK_WATCH_POLL_INTERVAL: "1000"
     depends_on:
       - server
     ports:
@@ -47,5 +39,3 @@ services:
 
 volumes:
   db_data:
-  server_node_modules:
-  client_node_modules:

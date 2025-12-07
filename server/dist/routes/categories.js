@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.categoriesRouter = void 0;
 const express_1 = require("express");
 const prisma_1 = require("../prisma");
+const permissions_1 = require("../middleware/permissions");
 exports.categoriesRouter = (0, express_1.Router)();
 exports.categoriesRouter.get("/", async (req, res) => {
     const { etablissementId } = req.query;
@@ -13,7 +14,7 @@ exports.categoriesRouter.get("/", async (req, res) => {
     });
     res.json(categories);
 });
-exports.categoriesRouter.post("/", async (req, res) => {
+exports.categoriesRouter.post("/", (0, permissions_1.requireAbility)("manageCategories"), async (req, res) => {
     const { nom, etablissementId } = req.body;
     if (!nom)
         return res.status(400).json({ message: "Nom requis" });
@@ -28,7 +29,7 @@ exports.categoriesRouter.post("/", async (req, res) => {
     });
     res.status(201).json(category);
 });
-exports.categoriesRouter.put("/:id", async (req, res) => {
+exports.categoriesRouter.put("/:id", (0, permissions_1.requireAbility)("manageCategories"), async (req, res) => {
     const existing = await prisma_1.prisma.category.findFirst({
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
     });
@@ -40,7 +41,7 @@ exports.categoriesRouter.put("/:id", async (req, res) => {
     });
     res.json(category);
 });
-exports.categoriesRouter.delete("/:id", async (req, res) => {
+exports.categoriesRouter.delete("/:id", (0, permissions_1.requireAbility)("manageCategories"), async (req, res) => {
     const existing = await prisma_1.prisma.category.findFirst({
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
     });

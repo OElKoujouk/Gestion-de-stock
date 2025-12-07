@@ -14,4 +14,5 @@ app.use(
   }),
 );
 
-app.use(apiRouter(authMiddleware, tenantMiddleware));
+// L'ensemble des routes de l'API est monté sous /api pour correspondre au proxy Nginx.
+app.use("/api", apiRouter(authMiddleware, tenantMiddleware));

@@ -9,6 +9,7 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = require("../prisma");
 const auth_1 = require("../middleware/auth");
+const permissions_1 = require("../permissions");
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-token";
 exports.authRouter = (0, express_1.Router)();
 exports.authRouter.post("/login", async (req, res) => {
@@ -29,6 +30,7 @@ exports.authRouter.post("/login", async (req, res) => {
     if (!user.actif) {
         return res.status(403).json({ message: "Compte désactivé" });
     }
+    const permissions = (0, permissions_1.normalizePermissions)(user.permissions, user.role);
     const token = jsonwebtoken_1.default.sign({
         sub: user.id,
         role: user.role,
@@ -42,6 +44,7 @@ exports.authRouter.post("/login", async (req, res) => {
             etablissement_id: user.etablissementId,
             nom: user.nom,
             email: user.identifiant,
+            permissions,
         },
     });
 });
@@ -61,6 +64,7 @@ exports.authRouter.get("/me", auth_1.authMiddleware, async (req, res) => {
             contactEmail: true,
             role: true,
             etablissementId: true,
+            permissions: true,
         },
     });
     if (!user) {
@@ -73,5 +77,6 @@ exports.authRouter.get("/me", auth_1.authMiddleware, async (req, res) => {
         contactEmail: user.contactEmail,
         role: user.role,
         etablissementId: user.etablissementId,
+        permissions: (0, permissions_1.normalizePermissions)(user.permissions, user.role),
     });
 });

@@ -10,6 +10,7 @@ const movements_1 = require("./routes/movements");
 const users_1 = require("./routes/users");
 const demandes_1 = require("./routes/demandes");
 const supplierOrders_1 = require("./routes/supplierOrders");
+const suppliers_1 = require("./routes/suppliers");
 function apiRouter(authMiddleware, tenantMiddleware) {
     const router = (0, express_1.Router)();
     router.use("/auth", auth_1.authRouter);
@@ -21,6 +22,7 @@ function apiRouter(authMiddleware, tenantMiddleware) {
     router.use("/mouvements", movements_1.movementsRouter);
     router.use("/users", users_1.usersRouter);
     router.use("/demandes", demandes_1.demandesRouter);
+    router.use("/fournisseurs", suppliers_1.suppliersRouter);
     router.use("/fournisseurs/commandes", supplierOrders_1.supplierOrdersRouter);
     return router;
 }

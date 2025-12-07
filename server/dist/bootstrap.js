@@ -11,6 +11,22 @@ const SUPER_ADMIN_PASSWORD = "admin";
 async function ensureSuperAdmin() {
     const existing = await prisma_1.prisma.user.findUnique({ where: { identifiant: SUPER_ADMIN_EMAIL } });
     if (existing) {
+        if (!existing.permissions) {
+            await prisma_1.prisma.user.update({
+                where: { id: existing.id },
+                data: {
+                    permissions: {
+                        allowedSections: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
+                        abilities: {
+                            manageCategories: true,
+                            manageProducts: true,
+                            manageSupplierOrders: true,
+                            manageMovements: true,
+                        },
+                    },
+                },
+            });
+        }
         return;
     }
     const hashedPassword = await bcryptjs_1.default.hash(SUPER_ADMIN_PASSWORD, 10);
@@ -23,6 +39,15 @@ async function ensureSuperAdmin() {
             role: "superadmin",
             actif: true,
             etablissementId: null,
+            permissions: {
+                allowedSections: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
+                abilities: {
+                    manageCategories: true,
+                    manageProducts: true,
+                    manageSupplierOrders: true,
+                    manageMovements: true,
+                },
+            },
         },
     });
     console.log("Super-admin par défaut créé (identifiant: admin-s / mdp: admin)");

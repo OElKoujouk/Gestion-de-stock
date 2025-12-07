@@ -15,4 +15,5 @@ exports.app.use((0, cors_1.default)({
     origin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
     credentials: false,
 }));
-exports.app.use((0, router_1.apiRouter)(auth_1.authMiddleware, tenant_1.tenantMiddleware));
+// L'ensemble des routes de l'API est monté sous /api pour correspondre au proxy Nginx.
+exports.app.use("/api", (0, router_1.apiRouter)(auth_1.authMiddleware, tenant_1.tenantMiddleware));
