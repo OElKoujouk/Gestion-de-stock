@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MobileNav } from "@/components/layout/MobileNav";
 import { NavGroup, Sidebar } from "@/components/layout/Sidebar";
-import { AuthSection, type RoleSelection } from "@/components/sections/AuthSection";
+import { AuthSection } from "@/components/sections/AuthSection";
 import { AdminEstablishmentSection } from "@/components/sections/AdminEstablishmentSection";
 import { AgentSection } from "@/components/sections/AgentSection";
 import { MovementsSection } from "@/components/sections/MovementsSection";
@@ -13,22 +13,18 @@ import { StoreManagerSection } from "@/components/sections/StoreManagerSection";
 import { SupplierOrdersSection } from "@/components/sections/SupplierOrdersSection";
 import { UsersSection } from "@/components/sections/UsersSection";
 import { AuthProvider } from "@/context/auth-context";
-import { setAccessToken } from "@/lib/api";
+import { api, setAccessToken } from "@/lib/api";
+import {
+  normalizePermissions,
+  SECTION_ORDER,
+  type SectionId,
+  type UserPermissions,
+  type AbilityKey,
+  defaultPermissionsForRole,
+  hasAbility as checkAbility,
+} from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-
-const SECTION_ORDER = [
-  "establishments",
-  "admin",
-  "responsable",
-  "agent",
-  "products",
-  "movements",
-  "supplierOrders",
-  "users",
-  "auth",
-] as const;
-
-type SectionId = (typeof SECTION_ORDER)[number];
+import { mapApiRoleToSelection, type RoleSelection } from "@/types/roles";
 
 const NAV_ICONS: Record<SectionId, string> = {
   establishments: "🏢",
@@ -69,6 +65,7 @@ const publicNavGroups: NavGroup<SectionId>[] = [
 const TOKEN_STORAGE_KEY = "gestion-stock:token";
 const ROLE_STORAGE_KEY = "gestion-stock:role";
 const USER_NAME_STORAGE_KEY = "gestion-stock:user-name";
+const PERMISSIONS_STORAGE_KEY = "gestion-stock:permissions";
 
 const sectionComponents: Record<SectionId, React.ComponentType> = {
   establishments: AdminEstablishmentSection,
@@ -90,26 +87,35 @@ function isRoleSelection(value: string | null): value is RoleSelection {
   return value === "superAdmin" || value === "admin" || value === "responsable" || value === "agent";
 }
 
-const ROLE_SECTIONS: Record<RoleSelection, SectionId[]> = {
-  superAdmin: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
-  admin: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
-  responsable: ["responsable", "supplierOrders", "products", "movements"],
-  agent: ["agent"],
-};
-
 export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentRole, setCurrentRole] = useState<RoleSelection | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("auth");
   const [hydrated, setHydrated] = useState(false);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
 
   const sectionsToDisplay = useMemo(() => {
     if (isAuthenticated && currentRole) {
-      return ROLE_SECTIONS[currentRole] ?? ["auth"];
+      const allowed =
+        permissions?.allowedSections?.length ? permissions.allowedSections : defaultPermissionsForRole(currentRole).allowedSections;
+      return allowed;
     }
     return ["auth"] as SectionId[];
-  }, [isAuthenticated, currentRole]);
+  }, [isAuthenticated, currentRole, permissions]);
+
+  const hasAbility = useCallback(
+    (ability: AbilityKey) => {
+      return checkAbility(permissions ?? undefined, ability);
+    },
+    [permissions],
+  );
+
+  useEffect(() => {
+    if (!sectionsToDisplay.includes(activeSection)) {
+      setActiveSection(sectionsToDisplay[0] ?? "auth");
+    }
+  }, [sectionsToDisplay, activeSection]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -124,8 +130,16 @@ export default function HomePage() {
       setIsAuthenticated(true);
       setCurrentRole(storedRole);
       setCurrentUserName(storedName ?? null);
-      const allowedSections = ROLE_SECTIONS[storedRole] ?? ["auth"];
-      setActiveSection(allowedSections[0]);
+      const storedPermissionsRaw = sessionStorage.getItem(PERMISSIONS_STORAGE_KEY);
+      const storedPermissions = storedPermissionsRaw ? (JSON.parse(storedPermissionsRaw) as UserPermissions) : null;
+      if (storedPermissions) {
+        setPermissions(storedPermissions);
+      }
+      const allowedSections =
+        storedPermissions?.allowedSections?.length
+          ? storedPermissions.allowedSections
+          : defaultPermissionsForRole(storedRole).allowedSections;
+      setActiveSection(allowedSections[0] ?? "auth");
     } else if (isSectionId(initialHash)) {
       setActiveSection(initialHash);
     }
@@ -169,18 +183,37 @@ export default function HomePage() {
     }
   }, [activeSection]);
 
-  const handleLogin = (token: string, role: RoleSelection, userName: string) => {
+  useEffect(() => {
+    if (!isAuthenticated || !currentRole) return;
+    api
+      .me()
+      .then((user) => {
+        const normalized = normalizePermissions(user.permissions as any, mapApiRoleToSelection(user.role));
+        setPermissions(normalized);
+        sessionStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(normalized));
+      })
+      .catch(() => null);
+  }, [isAuthenticated, currentRole]);
+
+  const handleLogin = (token: string, role: RoleSelection, userName: string, userPermissions?: UserPermissions) => {
     setAccessToken(token);
     if (typeof window !== "undefined") {
       sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
       sessionStorage.setItem(ROLE_STORAGE_KEY, role);
       sessionStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+      if (userPermissions) {
+        sessionStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(userPermissions));
+      } else {
+        sessionStorage.removeItem(PERMISSIONS_STORAGE_KEY);
+      }
     }
-    const allowedSections = ROLE_SECTIONS[role] ?? ["auth"];
+    const normalizedPermissions = userPermissions ? normalizePermissions(userPermissions, role) : defaultPermissionsForRole(role);
+    setPermissions(normalizedPermissions);
+    const allowedSections = normalizedPermissions.allowedSections;
     setIsAuthenticated(true);
     setCurrentRole(role);
     setCurrentUserName(userName);
-    setActiveSection(allowedSections[0]);
+    setActiveSection(allowedSections[0] ?? "auth");
   };
 
   const handleLogout = () => {
@@ -188,11 +221,13 @@ export default function HomePage() {
       sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       sessionStorage.removeItem(ROLE_STORAGE_KEY);
       sessionStorage.removeItem(USER_NAME_STORAGE_KEY);
+      sessionStorage.removeItem(PERMISSIONS_STORAGE_KEY);
     }
     setAccessToken(null);
     setIsAuthenticated(false);
     setCurrentRole(null);
     setCurrentUserName(null);
+    setPermissions(null);
     setActiveSection("auth");
   };
 
@@ -212,12 +247,14 @@ export default function HomePage() {
     if (!currentRole) {
       return baseNavGroups;
     }
-    const allowed = new Set<SectionId>(ROLE_SECTIONS[currentRole] ?? ["auth"]);
+    const allowed = new Set<SectionId>(
+      permissions?.allowedSections?.length ? permissions.allowedSections : defaultPermissionsForRole(currentRole).allowedSections,
+    );
     return baseNavGroups.map((group) => ({
       ...group,
       items: group.items.filter((item) => allowed.has(item.id)),
     }));
-  }, [isAuthenticated, currentRole]);
+  }, [isAuthenticated, currentRole, permissions]);
 
   const roleLabelMap: Record<RoleSelection, string> = {
     superAdmin: "Super-admin",
@@ -231,7 +268,7 @@ export default function HomePage() {
       <Sidebar groups={sidebarGroups} active={activeSection} onSelect={setActiveSection} />
       <div className="flex flex-1 flex-col lg:ml-72">
         <MobileNav groups={sidebarGroups} active={activeSection} onSelect={setActiveSection} />
-        <AuthProvider value={{ role: currentRole, isAuthenticated }}>
+        <AuthProvider value={{ role: currentRole, isAuthenticated, permissions, hasAbility }}>
           <main className="flex-1 space-y-5 px-4 py-6 sm:px-6 lg:px-12">
             <div className="rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-4 shadow-sm shadow-emerald-200/60">
               <div className="flex flex-wrap items-start justify-between gap-3">

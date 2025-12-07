@@ -2,9 +2,21 @@ import { useEffect, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { api } from "@/lib/api";
+import { UserPermissionsFields } from "@/components/super-admin/UserPermissionsFields";
+import { defaultPermissionsForRole, type UserPermissions } from "@/lib/permissions";
+import type { RoleSelection } from "@/types/roles";
 
 type Establishment = { id: string; nom: string };
-type User = { id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; actif: boolean; etablissementId: string | null };
+type User = {
+  id: string;
+  nom: string;
+  identifiant: string;
+  contactEmail?: string | null;
+  role: string;
+  actif: boolean;
+  etablissementId: string | null;
+  permissions: UserPermissions;
+};
 
 type Props = {
   open: boolean;
@@ -16,9 +28,17 @@ type Props = {
 };
 
 export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishments, canSelectTenant }: Props) {
-  const [form, setForm] = useState({ nom: "", identifiant: "", email: "", role: "agent", actif: true, etablissementId: "" });
+  const [form, setForm] = useState({
+    nom: "",
+    identifiant: "",
+    email: "",
+    role: "agent" as RoleSelection,
+    actif: true,
+    etablissementId: "",
+  });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [permissions, setPermissions] = useState<UserPermissions>(defaultPermissionsForRole("agent"));
 
   useEffect(() => {
     if (open && user) {
@@ -26,10 +46,11 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
         nom: user.nom,
         identifiant: user.identifiant,
         email: user.contactEmail ?? "",
-        role: user.role,
+        role: user.role as RoleSelection,
         actif: user.actif,
         etablissementId: user.etablissementId ?? "",
       });
+      setPermissions(user.permissions ?? defaultPermissionsForRole(user.role as RoleSelection));
       setError(null);
     }
     if (!open) {
@@ -57,6 +78,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
         role: form.role,
         actif: form.actif,
         etablissementId: canSelectTenant ? form.etablissementId || null : undefined,
+        permissions,
       });
       onUpdated();
       onOpenChange(false);
@@ -106,7 +128,11 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
               Rôle
               <select
                 value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+                onChange={(e) => {
+                  const nextRole = e.target.value as RoleSelection;
+                  setForm((f) => ({ ...f, role: nextRole }));
+                  setPermissions(defaultPermissionsForRole(nextRole));
+                }}
                 className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
               >
                 <option value="admin">Administrateur etablissement</option>
@@ -132,6 +158,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
                 </select>
               </label>
             ) : null}
+            <UserPermissionsFields role={form.role} value={permissions} onChange={setPermissions} />
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <input
                 type="checkbox"

@@ -1,3 +1,5 @@
+import type { UserPermissions } from "@/lib/permissions";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 let accessToken: string | null = null;
@@ -35,11 +37,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: (payload: { email: string; password: string }) =>
-    request<{ token: string; user: { id: string; role: string; etablissement_id: string | null; nom: string } }>("/auth/login", {
+    request<{
+      token: string;
+      user: { id: string; role: string; etablissement_id: string | null; nom: string; permissions: UserPermissions };
+    }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  me: () => request<{ id: string; nom: string; email: string; role: string; etablissementId: string | null }>("/auth/me"),
+  me: () =>
+    request<{ id: string; nom: string; email: string; role: string; etablissementId: string | null; permissions: UserPermissions }>(
+      "/auth/me",
+    ),
   stats: () => request("/articles"),
   getArticles: (params?: { etablissementId?: string }) => {
     const searchParams = new URLSearchParams();
@@ -203,6 +211,7 @@ export const api = {
         role: string;
         etablissementId: string | null;
         actif: boolean;
+        permissions: UserPermissions;
       }>
     >("/users"),
   createUser: (payload: {
@@ -212,12 +221,32 @@ export const api = {
     motDePasse: string;
     role: string;
     etablissementId?: string | null;
+    permissions?: UserPermissions;
   }) =>
-    request<{ id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; etablissementId: string | null }>("/users", {
+    request<{
+      id: string;
+      nom: string;
+      identifiant: string;
+      contactEmail?: string | null;
+      role: string;
+      etablissementId: string | null;
+      permissions: UserPermissions;
+    }>("/users", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  updateUser: (id: string, payload: { nom: string; identifiant: string; contactEmail?: string | null; role: string; actif: boolean; etablissementId?: string | null }) =>
+  updateUser: (
+    id: string,
+    payload: {
+      nom: string;
+      identifiant: string;
+      contactEmail?: string | null;
+      role: string;
+      actif: boolean;
+      etablissementId?: string | null;
+      permissions?: UserPermissions;
+    },
+  ) =>
     request<{
       id: string;
       nom: string;
@@ -226,6 +255,7 @@ export const api = {
       role: string;
       etablissementId: string | null;
       actif: boolean;
+      permissions: UserPermissions;
     }>(`/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),

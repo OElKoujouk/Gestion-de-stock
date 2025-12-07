@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { allowRoles } from "../middleware/role";
+import { mergePermissionsUpdate, normalizePermissions } from "../permissions";
 
 export const usersRouter = Router();
 
@@ -22,13 +23,14 @@ usersRouter.get("/", async (req, res) => {
       actif: true,
       etablissementId: true,
       createdAt: true,
+      permissions: true,
     },
   });
-  res.json(users);
+  res.json(users.map((user) => ({ ...user, permissions: normalizePermissions(user.permissions, user.role) })));
 });
 
 usersRouter.post("/", async (req, res) => {
-  const { nom, identifiant, contactEmail, motDePasse, role, actif, etablissementId } = req.body as {
+  const { nom, identifiant, contactEmail, motDePasse, role, actif, etablissementId, permissions } = req.body as {
     nom?: string;
     identifiant?: string;
     contactEmail?: string | null;
@@ -36,6 +38,7 @@ usersRouter.post("/", async (req, res) => {
     role?: string;
     actif?: boolean;
     etablissementId?: string | null;
+    permissions?: unknown;
   };
   if (!nom || !identifiant || !motDePasse || !role) {
     return res.status(400).json({ message: "Champs requis manquants" });
@@ -47,6 +50,7 @@ usersRouter.post("/", async (req, res) => {
   }
   let user;
   try {
+    const computedPermissions = mergePermissionsUpdate(permissions as any, role as any);
     user = await prisma.user.create({
       data: {
         nom,
@@ -56,6 +60,7 @@ usersRouter.post("/", async (req, res) => {
         role: role as any,
         actif: actif ?? true,
         etablissementId: assignedTenant,
+        permissions: computedPermissions,
       },
     });
   } catch (error) {
@@ -73,6 +78,7 @@ usersRouter.post("/", async (req, res) => {
       contactEmail: user.contactEmail,
       role: user.role,
       etablissementId: user.etablissementId,
+      permissions: normalizePermissions(user.permissions, user.role),
     });
 });
 
@@ -82,7 +88,7 @@ usersRouter.put("/:id", async (req, res) => {
   });
   if (!existing) return res.status(404).json({ message: "Utilisateur introuvable" });
 
-  const { nom, identifiant, contactEmail, role, actif, motDePasse, etablissementId } = req.body as {
+  const { nom, identifiant, contactEmail, role, actif, motDePasse, etablissementId, permissions } = req.body as {
     nom?: string;
     identifiant?: string;
     contactEmail?: string | null;
@@ -90,6 +96,7 @@ usersRouter.put("/:id", async (req, res) => {
     actif?: boolean;
     motDePasse?: string;
     etablissementId?: string | null;
+    permissions?: unknown;
   };
 
   if (!nom || !identifiant || !role) {
@@ -111,6 +118,8 @@ usersRouter.put("/:id", async (req, res) => {
     data.motDePasse = await bcrypt.hash(motDePasse, 10);
   }
 
+  data.permissions = mergePermissionsUpdate(permissions as any, role as any);
+
   if (!req.tenantId) {
     const assignedTenant = typeof etablissementId === "undefined" ? existing.etablissementId : etablissementId ?? null;
     if ((role === "admin" || role === "responsable") && !assignedTenant) {
@@ -127,12 +136,13 @@ usersRouter.put("/:id", async (req, res) => {
   res.json({
     id: user.id,
     nom: user.nom,
-    identifiant: user.identifiant,
-    contactEmail: user.contactEmail,
-    role: user.role,
-    actif: user.actif,
-    etablissementId: user.etablissementId,
-  });
+      identifiant: user.identifiant,
+      contactEmail: user.contactEmail,
+      role: user.role,
+      actif: user.actif,
+      etablissementId: user.etablissementId,
+      permissions: normalizePermissions(user.permissions, user.role),
+    });
 });
 
 usersRouter.patch("/:id/activation", async (req, res) => {

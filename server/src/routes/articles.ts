@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../prisma";
+import { requireAbility } from "../middleware/permissions";
 
 export const articlesRouter = Router();
 
@@ -29,7 +30,7 @@ articlesRouter.get("/", async (req, res) => {
   res.json(articles);
 });
 
-articlesRouter.post("/", async (req, res) => {
+articlesRouter.post("/", requireAbility("manageProducts"), async (req, res) => {
   const { nom, categorieId, quantite, referenceFournisseur, seuilAlerte, description, conditionnement, etablissementId } =
     req.body;
   if (!nom || quantite === undefined || seuilAlerte === undefined) {
@@ -66,7 +67,7 @@ articlesRouter.get("/:id", async (req, res) => {
   res.json(article);
 });
 
-articlesRouter.put("/:id", async (req, res) => {
+articlesRouter.put("/:id", requireAbility("manageProducts"), async (req, res) => {
   const existing = await prisma.article.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
   });
@@ -101,7 +102,7 @@ articlesRouter.put("/:id", async (req, res) => {
   res.json(article);
 });
 
-articlesRouter.delete("/:id", async (req, res) => {
+articlesRouter.delete("/:id", requireAbility("manageProducts"), async (req, res) => {
   const existing = await prisma.article.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
   });
@@ -117,7 +118,7 @@ articlesRouter.delete("/:id", async (req, res) => {
   res.status(204).send();
 });
 
-articlesRouter.patch("/:id/stock", async (req, res) => {
+articlesRouter.patch("/:id/stock", requireAbility("manageProducts"), async (req, res) => {
   const existing = await prisma.article.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
   });

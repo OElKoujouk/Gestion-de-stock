@@ -2,11 +2,11 @@
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { api } from "@/lib/api";
-
-export type RoleSelection = "superAdmin" | "admin" | "responsable" | "agent";
+import { normalizePermissions, type UserPermissions } from "@/lib/permissions";
+import { mapApiRoleToSelection, type RoleSelection } from "@/types/roles";
 
 type AuthSectionProps = {
-  onAuthenticated?: (token: string, role: RoleSelection, userName: string) => void;
+  onAuthenticated?: (token: string, role: RoleSelection, userName: string, permissions?: UserPermissions) => void;
 };
 
 export function AuthSection({ onAuthenticated }: AuthSectionProps) {
@@ -24,20 +24,14 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
     try {
       const response = await api.login({ email, password });
 
-      const roleMap: Record<string, RoleSelection> = {
-        superadmin: "superAdmin",
-        admin: "admin",
-        responsable: "responsable",
-        agent: "agent",
-      };
-
-      const role = roleMap[response.user.role] ?? "admin";
+      const role = mapApiRoleToSelection(response.user.role);
+      const permissions = normalizePermissions(response.user.permissions as any, role);
 
       if (!rememberInTab) {
         sessionStorage.clear();
       }
 
-      onAuthenticated?.(response.token, role, response.user.nom);
+      onAuthenticated?.(response.token, role, response.user.nom, permissions);
     } catch (err) {
       setError(
         err instanceof Error

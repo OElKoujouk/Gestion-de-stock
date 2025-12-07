@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../prisma";
 import { authMiddleware } from "../middleware/auth";
+import { normalizePermissions } from "../permissions";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-token";
 
@@ -27,6 +28,7 @@ authRouter.post("/login", async (req, res) => {
   if (!user.actif) {
     return res.status(403).json({ message: "Compte désactivé" });
   }
+  const permissions = normalizePermissions(user.permissions, user.role);
   const token = jwt.sign(
     {
       sub: user.id,
@@ -44,6 +46,7 @@ authRouter.post("/login", async (req, res) => {
       etablissement_id: user.etablissementId,
       nom: user.nom,
       email: user.identifiant,
+      permissions,
     },
   });
 });
@@ -65,6 +68,7 @@ authRouter.get("/me", authMiddleware, async (req, res) => {
       contactEmail: true,
       role: true,
       etablissementId: true,
+      permissions: true,
     },
   });
   if (!user) {
@@ -77,5 +81,6 @@ authRouter.get("/me", authMiddleware, async (req, res) => {
     contactEmail: user.contactEmail,
     role: user.role,
     etablissementId: user.etablissementId,
+    permissions: normalizePermissions(user.permissions, user.role),
   });
 });

@@ -9,6 +9,7 @@ import { EditUserDialog } from "@/components/super-admin/EditUserDialog";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import type { UserPermissions } from "@/lib/permissions";
 
 type Establishment = {
   id: string;
@@ -26,6 +27,7 @@ type UserSummary = {
   role: string;
   etablissementId: string | null;
   actif: boolean;
+  permissions: UserPermissions;
 };
 type ArticleSummary = {
   id: string;
@@ -103,6 +105,7 @@ export function AdminEstablishmentSection() {
           role: u.role,
           etablissementId: u.etablissementId,
           actif: u.actif,
+          permissions: u.permissions,
         })),
       );
       setUsersError(null);
@@ -296,7 +299,15 @@ export function AdminEstablishmentSection() {
     }
   };
 
-  const handleUserCreated = (user: { id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; etablissementId: string | null }) => {
+  const handleUserCreated = (user: {
+    id: string;
+    nom: string;
+    identifiant: string;
+    contactEmail?: string | null;
+    role: string;
+    etablissementId: string | null;
+    permissions: UserPermissions;
+  }) => {
     setUserDialogOpen(false);
     void fetchUsers();
     const contact = user.contactEmail ? ` · ${user.contactEmail}` : "";

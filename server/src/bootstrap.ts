@@ -7,6 +7,22 @@ const SUPER_ADMIN_PASSWORD = "admin";
 export async function ensureSuperAdmin() {
   const existing = await prisma.user.findUnique({ where: { identifiant: SUPER_ADMIN_EMAIL } });
   if (existing) {
+    if (!existing.permissions) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          permissions: {
+            allowedSections: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
+            abilities: {
+              manageCategories: true,
+              manageProducts: true,
+              manageSupplierOrders: true,
+              manageMovements: true,
+            },
+          },
+        },
+      });
+    }
     return;
   }
 
@@ -21,6 +37,15 @@ export async function ensureSuperAdmin() {
       role: "superadmin",
       actif: true,
       etablissementId: null,
+      permissions: {
+        allowedSections: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
+        abilities: {
+          manageCategories: true,
+          manageProducts: true,
+          manageSupplierOrders: true,
+          manageMovements: true,
+        },
+      },
     },
   });
 

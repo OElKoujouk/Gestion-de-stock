@@ -28,9 +28,11 @@ const initialArticleForm = {
 const PRODUCT_GRID_TEMPLATE = "2fr 1fr 0.7fr 0.7fr 0.9fr";
 
 export function ProductsSection() {
-  const { role } = useAuth();
+  const { role, hasAbility } = useAuth();
   const isSuperAdmin = role === "superAdmin";
-  const canManage = role === "superAdmin" || role === "admin" || role === "responsable";
+  const canManageCategories = hasAbility("manageCategories");
+  const canManageProducts = hasAbility("manageProducts");
+  const canManage = canManageCategories || canManageProducts;
 
   const [establishments, setEstablishments] = useState<EstablishmentOption[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState("");
@@ -61,7 +63,10 @@ export function ProductsSection() {
   const [showOnlyAlerts, setShowOnlyAlerts] = useState(false);
 
   const targetTenantId = isSuperAdmin ? selectedTenantId || "" : undefined;
-  const readyToManage = canManage && (!isSuperAdmin || Boolean(targetTenantId));
+  const canLoadInventory = !isSuperAdmin || Boolean(targetTenantId);
+  const readyToManage = canManage && canLoadInventory;
+  const showCategoriesManager = readyToManage && canManageCategories;
+  const showProductsManager = readyToManage && canManageProducts;
 
   /* ───────────────────── Établissements ───────────────────── */
 
@@ -131,7 +136,7 @@ export function ProductsSection() {
   };
 
   useEffect(() => {
-    if (!readyToManage) {
+    if (!canLoadInventory) {
       setLoading({ categories: false, articles: false });
       setEditingArticleId(null);
       return;
@@ -139,12 +144,16 @@ export function ProductsSection() {
     setEditingArticleId(null);
     void fetchCategories(targetTenantId);
     void fetchArticles(targetTenantId);
-  }, [readyToManage, targetTenantId]);
+  }, [canLoadInventory, targetTenantId]);
 
   /* ───────────────────── Création / édition catégories ───────────────────── */
 
   const handleCreateCategory = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canManageCategories) {
+      setCategoryError("Vous n'avez pas la permission de creer des categories.");
+      return;
+    }
     if (isSuperAdmin && !targetTenantId) {
       setCategoryError("Choisissez un établissement.");
       return;
@@ -175,6 +184,10 @@ export function ProductsSection() {
 
   const handleCreateArticle = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!canManageProducts) {
+      setArticleError("Vous n'avez pas la permission de creer des produits.");
+      return;
+    }
     if (isSuperAdmin && !targetTenantId) {
       setArticleError("Choisissez un établissement.");
       return;
@@ -358,31 +371,299 @@ export function ProductsSection() {
       {/* Filtres produits */}
       <Card>
         <CardHeader title="Filtres & recherche" subtitle="Affinez l’affichage du stock" />
-        {readyToManage ? (
-          <div className="flex flex-wrap items-center gap-3 pt-2 text-sm">
-            <input
-              type="search"
-              placeholder="Rechercher un produit ou une référence"
-              className="w-full max-w-xs rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
-            <button
-              type="button"
-              className={cn(
-                "rounded-full px-3 py-2 text-xs font-semibold",
-                showOnlyAlerts
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-800 hover:bg-slate-200",
-              )}
-              onClick={() => setShowOnlyAlerts((prev) => !prev)}
-            >
-              {showOnlyAlerts ? "Afficher tout le stock" : "Afficher uniquement les alertes"}
-            </button>
-            <span className="text-xs text-slate-500">
-              {visibleArticles.length} produit(s) affiché(s)
-            </span>
-          </div>
+        {canLoadInventory ? (
+          showCategoriesManager || showProductsManager ? (
+            <div className="grid gap-6 lg:grid-cols-2">
+            {showCategoriesManager ? (
+              <Card className="bg-gradient-to-br from-slate-50 to-white">
+                <CardHeader title="Catégories" subtitle="Organisez votre catalogue" />
+                {loading.categories ? (
+                  <p className="text-sm text-slate-500">Chargement...</p>
+                ) : errors.categories ? (
+                  <p className="text-sm text-rose-600">{errors.categories}</p>
+                ) : categories.length === 0 ? (
+                  <p className="text-sm text-slate-500">Aucune catégorie pour le moment.</p>
+                ) : (
+                  <ul className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    {categories.map((category) => (
+                      <li
+                        key={category.id}
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+                      >
+                        {editingCategoryId === category.id ? (
+                          <form
+                            className="flex w-full items-center gap-2"
+                            onSubmit={async (event) => {
+                              event.preventDefault();
+                              if (!categoryName.trim()) {
+                                setCategoryError("Nom requis");
+                                return;
+                              }
+                              setCategorySubmitting(true);
+                              setCategoryError(null);
+                              try {
+                                const updated = await api.updateCategory(category.id, {
+                                  nom: categoryName.trim(),
+                                });
+                                setCategories((prev) =>
+                                  prev.map((cat) => (cat.id === category.id ? updated : cat)),
+                                );
+                                setEditingCategoryId(null);
+                                setCategoryName("");
+                              } catch (err) {
+                                setCategoryError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Impossible de mettre à jour la catégorie",
+                                );
+                              } finally {
+                                setCategorySubmitting(false);
+                              }
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={categoryName}
+                              onChange={(event) => setCategoryName(event.target.value)}
+                              className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                              disabled={!canManageCategories}
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                              disabled={categorySubmitting || !canManageCategories}
+                            >
+                              Sauver
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs font-semibold text-slate-500 underline"
+                              onClick={() => {
+                                setEditingCategoryId(null);
+                                setCategoryName("");
+                                setCategoryError(null);
+                              }}
+                            >
+                              Annuler
+                            </button>
+                          </form>
+                        ) : (
+                          <>
+                            <span className="font-semibold text-slate-900">{category.nom}</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+                                onClick={() => {
+                                  setEditingCategoryId(category.id);
+                                  setCategoryName(category.nom);
+                                  setCategoryError(null);
+                                }}
+                                disabled={!canManageCategories}
+                              >
+                                Modifier
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
+                                disabled={categorySubmitting || !canManageCategories}
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Supprimer la catégorie « ${category.nom} » ?`,
+                                    )
+                                  )
+                                    return;
+                                  setCategorySubmitting(true);
+                                  setCategoryError(null);
+                                  try {
+                                    await api.deleteCategory(category.id);
+                                    setCategories((prev) =>
+                                      prev.filter((cat) => cat.id !== category.id),
+                                    );
+                                    setArticles((prev) =>
+                                      prev.map((article) =>
+                                        article.categorieId === category.id
+                                          ? { ...article, categorieId: null }
+                                          : article,
+                                      ),
+                                    );
+                                  } catch (err) {
+                                    setCategoryError(
+                                      err instanceof Error
+                                        ? err.message
+                                        : "Impossible de supprimer la catégorie",
+                                    );
+                                  } finally {
+                                    setCategorySubmitting(false);
+                                  }
+                                }}
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <form
+                  className="mt-6 space-y-3 rounded-2xl border border-slate-100 bg-white/70 p-4 shadow-sm"
+                  onSubmit={handleCreateCategory}
+                >
+                  <label className="text-sm font-medium text-slate-700">
+                    Nouvelle catégorie
+                    <div className="mt-1 flex gap-3">
+                      <input
+                        type="text"
+                        value={categoryName}
+                        onChange={(event) => setCategoryName(event.target.value)}
+                        className="flex-1 rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                        placeholder="Ex : Fournitures"
+                        disabled={!canManageCategories}
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+                        disabled={categorySubmitting || !canManageCategories}
+                      >
+                        {categorySubmitting ? "Ajout..." : "Ajouter"}
+                      </button>
+                    </div>
+                  </label>
+                  {categoryError ? (
+                    <p className="text-sm text-rose-600">{categoryError}</p>
+                  ) : null}
+                  <p className="text-xs text-slate-500">
+                    {canManageCategories
+                      ? "Ajoutez des catégories pour mieux structurer le catalogue."
+                      : "Vous n'avez pas l'autorisation de créer ou modifier les catégories."}
+                  </p>
+                </form>
+              </Card>
+            ) : null}
+
+            {showProductsManager ? (
+              <Card className="bg-gradient-to-br from-white to-slate-50">
+                <CardHeader title="Créer un produit" subtitle="Réservé à l’établissement sélectionné" />
+                <form className="space-y-4" onSubmit={handleCreateArticle}>
+                  <div className="grid gap-4">
+                    <label className="text-sm font-medium text-slate-700">
+                      Nom du produit
+                      <input
+                        type="text"
+                        value={articleForm.nom}
+                        onChange={(event) =>
+                          setArticleForm((prev) => ({ ...prev, nom: event.target.value }))
+                        }
+                        className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                        required
+                        disabled={!canManageProducts}
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-slate-700">
+                      Catégorie
+                      <select
+                        value={articleForm.categorieId}
+                        onChange={(event) =>
+                          setArticleForm((prev) => ({ ...prev, categorieId: event.target.value }))
+                        }
+                        className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                        disabled={!canManageProducts}
+                      >
+                        <option value="">Aucune</option>
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.nom}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Quantité
+                        <input
+                          type="number"
+                          min={0}
+                          value={articleForm.quantite}
+                          onChange={(event) =>
+                            setArticleForm((prev) => ({
+                              ...prev,
+                              quantite: Number(event.target.value),
+                            }))
+                          }
+                          className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                          required
+                          disabled={!canManageProducts}
+                        />
+                      </label>
+                      <label className="text-sm font-medium text-slate-700">
+                        Seuil d’alerte
+                        <input
+                          type="number"
+                          min={0}
+                          value={articleForm.seuilAlerte}
+                          onChange={(event) =>
+                            setArticleForm((prev) => ({
+                              ...prev,
+                              seuilAlerte: Number(event.target.value),
+                            }))
+                          }
+                          className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                          required
+                          disabled={!canManageProducts}
+                        />
+                      </label>
+                    </div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Référence fournisseur (optionnel)
+                      <input
+                        type="text"
+                        value={articleForm.referenceFournisseur}
+                        onChange={(event) =>
+                          setArticleForm((prev) => ({
+                            ...prev,
+                            referenceFournisseur: event.target.value,
+                          }))
+                        }
+                        className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                        disabled={!canManageProducts}
+                      />
+                    </label>
+                  </div>
+                  {articleError ? <p className="text-sm text-rose-600">{articleError}</p> : null}
+                  <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                    <span>
+                      {canManageProducts
+                        ? "Complétez les champs obligatoires avant de créer le produit."
+                        : "Permissions manquantes pour créer ou modifier des produits."}
+                    </span>
+                    <button
+                      type="submit"
+                      className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+                      disabled={articleSubmitting || !canManageProducts}
+                    >
+                      {articleSubmitting ? "Création..." : "Créer le produit"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {canManageProducts
+                      ? "Créez un produit pour l’établissement sélectionné. Le stock est mis à jour par les demandes et les mouvements."
+                      : "Vous n'avez pas l'autorisation de créer ou modifier des produits."}
+                  </p>
+                </form>
+              </Card>
+            ) : null}
+            </div>
+          ) : (
+            <Card>
+              <CardHeader title="Gestion restreinte" subtitle="Permissions insuffisantes" />
+              <p className="text-sm text-slate-600">
+                Activez au moins une permission (catégories ou produits) pour gérer le catalogue.
+              </p>
+            </Card>
+          )
         ) : (
           <p className="pt-2 text-sm text-slate-500">
             Sélectionnez un établissement et un rôle autorisé pour gérer le stock.
@@ -390,288 +671,13 @@ export function ProductsSection() {
         )}
       </Card>
 
-      {/* Gestion catégories / création produit */}
-      {readyToManage ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Catégories */}
-          <Card className="bg-gradient-to-br from-slate-50 to-white">
-            <CardHeader title="Catégories" subtitle="Organisez votre catalogue" />
-            {loading.categories ? (
-              <p className="text-sm text-slate-500">Chargement...</p>
-            ) : errors.categories ? (
-              <p className="text-sm text-rose-600">{errors.categories}</p>
-            ) : categories.length === 0 ? (
-              <p className="text-sm text-slate-500">Aucune catégorie pour le moment.</p>
-            ) : (
-              <ul className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                {categories.map((category) => (
-                  <li
-                    key={category.id}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
-                  >
-                    {editingCategoryId === category.id ? (
-                      <form
-                        className="flex w-full items-center gap-2"
-                        onSubmit={async (event) => {
-                          event.preventDefault();
-                          if (!categoryName.trim()) {
-                            setCategoryError("Nom requis");
-                            return;
-                          }
-                          setCategorySubmitting(true);
-                          setCategoryError(null);
-                          try {
-                            const updated = await api.updateCategory(category.id, {
-                              nom: categoryName.trim(),
-                            });
-                            setCategories((prev) =>
-                              prev.map((cat) => (cat.id === category.id ? updated : cat)),
-                            );
-                            setEditingCategoryId(null);
-                            setCategoryName("");
-                          } catch (err) {
-                            setCategoryError(
-                              err instanceof Error
-                                ? err.message
-                                : "Impossible de mettre à jour la catégorie",
-                            );
-                          } finally {
-                            setCategorySubmitting(false);
-                          }
-                        }}
-                      >
-                        <input
-                          type="text"
-                          value={categoryName}
-                          onChange={(event) => setCategoryName(event.target.value)}
-                          className="flex-1 rounded-full border border-slate-200 px-3 py-1 text-sm focus:border-emerald-500/70 focus:outline-none"
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
-                          disabled={categorySubmitting}
-                        >
-                          Sauver
-                        </button>
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-slate-500 underline"
-                          onClick={() => {
-                            setEditingCategoryId(null);
-                            setCategoryName("");
-                            setCategoryError(null);
-                          }}
-                        >
-                          Annuler
-                        </button>
-                      </form>
-                    ) : (
-                      <>
-                        <span className="font-semibold text-slate-900">{category.nom}</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-200"
-                            onClick={() => {
-                              setEditingCategoryId(category.id);
-                              setCategoryName(category.nom);
-                              setCategoryError(null);
-                            }}
-                          >
-                            Modifier
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
-                            disabled={categorySubmitting}
-                            onClick={async () => {
-                              if (
-                                !window.confirm(
-                                  `Supprimer la catégorie « ${category.nom} » ?`,
-                                )
-                              )
-                                return;
-                              setCategorySubmitting(true);
-                              setCategoryError(null);
-                              try {
-                                await api.deleteCategory(category.id);
-                                setCategories((prev) =>
-                                  prev.filter((cat) => cat.id !== category.id),
-                                );
-                                setArticles((prev) =>
-                                  prev.map((article) =>
-                                    article.categorieId === category.id
-                                      ? { ...article, categorieId: null }
-                                      : article,
-                                  ),
-                                );
-                              } catch (err) {
-                                setCategoryError(
-                                  err instanceof Error
-                                    ? err.message
-                                    : "Impossible de supprimer la catégorie",
-                                );
-                              } finally {
-                                setCategorySubmitting(false);
-                              }
-                            }}
-                          >
-                            Supprimer
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <form
-              className="mt-6 space-y-3 rounded-2xl border border-slate-100 bg-white/70 p-4 shadow-sm"
-              onSubmit={handleCreateCategory}
-            >
-              <label className="text-sm font-medium text-slate-700">
-                Nouvelle catégorie
-                <div className="mt-1 flex gap-3">
-                  <input
-                    type="text"
-                    value={categoryName}
-                    onChange={(event) => setCategoryName(event.target.value)}
-                    className="flex-1 rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                    placeholder="Ex : Fournitures"
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-                    disabled={categorySubmitting}
-                  >
-                    {categorySubmitting ? "Ajout..." : "Ajouter"}
-                  </button>
-                </div>
-              </label>
-              {categoryError ? (
-                <p className="text-sm text-rose-600">{categoryError}</p>
-              ) : null}
-              <p className="text-xs text-slate-500">
-                Ajoutez des catégories pour mieux structurer le catalogue.
-              </p>
-            </form>
-          </Card>
-
-          {/* Création produit */}
-          <Card className="bg-gradient-to-br from-white to-slate-50">
-            <CardHeader title="Créer un produit" subtitle="Réservé à l’établissement sélectionné" />
-            <form className="space-y-4" onSubmit={handleCreateArticle}>
-              <div className="grid gap-4">
-                <label className="text-sm font-medium text-slate-700">
-                  Nom du produit
-                  <input
-                    type="text"
-                    value={articleForm.nom}
-                    onChange={(event) =>
-                      setArticleForm((prev) => ({ ...prev, nom: event.target.value }))
-                    }
-                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                    required
-                  />
-                </label>
-                <label className="text-sm font-medium text-slate-700">
-                  Catégorie
-                  <select
-                    value={articleForm.categorieId}
-                    onChange={(event) =>
-                      setArticleForm((prev) => ({ ...prev, categorieId: event.target.value }))
-                    }
-                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                  >
-                    <option value="">Aucune</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.nom}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    Quantité
-                    <input
-                      type="number"
-                      min={0}
-                      value={articleForm.quantite}
-                      onChange={(event) =>
-                        setArticleForm((prev) => ({
-                          ...prev,
-                          quantite: Number(event.target.value),
-                        }))
-                      }
-                      className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                      required
-                    />
-                  </label>
-                  <label className="text-sm font-medium text-slate-700">
-                    Seuil d’alerte
-                    <input
-                      type="number"
-                      min={0}
-                      value={articleForm.seuilAlerte}
-                      onChange={(event) =>
-                        setArticleForm((prev) => ({
-                          ...prev,
-                          seuilAlerte: Number(event.target.value),
-                        }))
-                      }
-                      className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                      required
-                    />
-                  </label>
-                </div>
-                <label className="text-sm font-medium text-slate-700">
-                  Référence fournisseur (optionnel)
-                  <input
-                    type="text"
-                    value={articleForm.referenceFournisseur}
-                    onChange={(event) =>
-                      setArticleForm((prev) => ({
-                        ...prev,
-                        referenceFournisseur: event.target.value,
-                      }))
-                    }
-                    className="mt-1 w-full rounded-full border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
-                  />
-                </label>
-              </div>
-              {articleError ? <p className="text-sm text-rose-600">{articleError}</p> : null}
-              <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                <span>Complétez les champs obligatoires avant de créer le produit.</span>
-                <button
-                  type="submit"
-                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-                  disabled={articleSubmitting}
-                >
-                  {articleSubmitting ? "Création..." : "Créer le produit"}
-                </button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      ) : (
-        <Card>
-          <CardHeader title="Gestion restreinte" subtitle="Connectez-vous avec un rôle autorisé" />
-          <p className="text-sm text-slate-600">
-            {isSuperAdmin
-              ? "Sélectionnez un établissement pour commencer."
-              : "Seuls les administrateurs, responsables ou super-admin peuvent créer des produits."}
-          </p>
-        </Card>
-      )}
-
       {/* Stock regroupé par catégorie */}
       <Card>
         <CardHeader
           title="Stock"
           subtitle="Tous les produits regroupés par catégorie"
           action={
-            readyToManage ? (
+            canLoadInventory ? (
               <span className="rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold text-slate-700">
                 {visibleArticles.length} produit(s) – {alertCount} alerte(s)
               </span>

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma";
+import { requireAbility } from "../middleware/permissions";
 
 export const categoriesRouter = Router();
 
@@ -13,7 +14,7 @@ categoriesRouter.get("/", async (req, res) => {
   res.json(categories);
 });
 
-categoriesRouter.post("/", async (req, res) => {
+categoriesRouter.post("/", requireAbility("manageCategories"), async (req, res) => {
   const { nom, etablissementId } = req.body as { nom?: string; etablissementId?: string | null };
   if (!nom) return res.status(400).json({ message: "Nom requis" });
   const tenantId = req.tenantId ?? etablissementId;
@@ -27,7 +28,7 @@ categoriesRouter.post("/", async (req, res) => {
   res.status(201).json(category);
 });
 
-categoriesRouter.put("/:id", async (req, res) => {
+categoriesRouter.put("/:id", requireAbility("manageCategories"), async (req, res) => {
   const existing = await prisma.category.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
   });
@@ -39,7 +40,7 @@ categoriesRouter.put("/:id", async (req, res) => {
   res.json(category);
 });
 
-categoriesRouter.delete("/:id", async (req, res) => {
+categoriesRouter.delete("/:id", requireAbility("manageCategories"), async (req, res) => {
   const existing = await prisma.category.findFirst({
     where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
   });

@@ -7,6 +7,7 @@ import { CreateUserForm } from "@/components/super-admin/CreateUserForm";
 import { EditUserDialog } from "@/components/super-admin/EditUserDialog";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
+import type { UserPermissions } from "@/lib/permissions";
 
 export function UsersSection() {
   const { role } = useAuth();
@@ -15,7 +16,16 @@ export function UsersSection() {
   const canManageUsers = role === "superAdmin" || role === "admin";
 
   const [users, setUsers] = useState<
-    Array<{ id: string; nom: string; identifiant: string; contactEmail?: string | null; role: string; actif: boolean; etablissementId: string | null }>
+    Array<{
+      id: string;
+      nom: string;
+      identifiant: string;
+      contactEmail?: string | null;
+      role: string;
+      actif: boolean;
+      etablissementId: string | null;
+      permissions: UserPermissions;
+    }>
   >([]);
   const [establishments, setEstablishments] = useState<Array<{ id: string; nom: string }>>([]);
   const [establishmentNames, setEstablishmentNames] = useState<Record<string, string>>({});
