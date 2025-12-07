@@ -233,38 +233,37 @@ export default function HomePage() {
         <MobileNav groups={sidebarGroups} active={activeSection} onSelect={setActiveSection} />
         <AuthProvider value={{ role: currentRole, isAuthenticated }}>
           <main className="flex-1 space-y-5 px-4 py-6 sm:px-6 lg:px-12">
-            <div className="rounded-xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-3 shadow-sm shadow-emerald-200/60">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-4 shadow-sm shadow-emerald-200/60">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Console multi-etablissement</p>
                   <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Tableau de bord</h1>
+                  <p className="text-sm text-emerald-900">
+                    {isAuthenticated && currentRole ? (
+                      <>
+                        Connecte en tant que <span className="font-semibold">{roleLabelMap[currentRole]}</span>
+                        {currentUserName ? ` · ${currentUserName}` : ""}
+                      </>
+                    ) : (
+                      "Connexion requise pour accéder aux sections"
+                    )}
+                  </p>
                 </div>
-                <div className="flex flex-col items-end gap-1 text-xs text-slate-800">
+                <div className="flex flex-col items-end gap-2 text-xs text-slate-800">
                   <span className="rounded-full bg-emerald-200 px-3 py-1 font-semibold text-emerald-900">
                     {sidebarGroups.flatMap((g) => g.items).find((i) => i.id === activeSection)?.label ?? "Authentification"}
                   </span>
-                  <span className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1 font-semibold text-slate-900">
-                    {isAuthenticated && currentRole ? roleLabelMap[currentRole] : "Connexion requise"}
-                  </span>
+                  {isAuthenticated && currentRole ? (
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1 font-semibold text-emerald-900 hover:bg-white"
+                    >
+                      Se deconnecter
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
-
-            {isAuthenticated && currentRole ? (
-              <div className="flex flex-wrap items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-3 text-sm text-emerald-900 shadow-sm shadow-emerald-150/60">
-                <p>
-                  Connecte en tant <span className="font-semibold">{roleLabelMap[currentRole]}</span>
-                  {currentUserName ? ` · ${currentUserName}` : ""}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1 font-semibold text-emerald-900 hover:bg-white"
-                >
-                  Se deconnecter
-                </button>
-              </div>
-            ) : null}
 
             {sectionList
               .filter(({ id }) => sectionsToDisplay.includes(id))
