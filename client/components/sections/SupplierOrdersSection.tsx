@@ -243,6 +243,26 @@ export function SupplierOrdersSection() {
     }
   };
 
+  const handleUpdateSupplier = () => {
+    if (!selectedSupplierId) {
+      setSubmitMessage("Sélectionnez un fournisseur à modifier.");
+      return;
+    }
+    if (!supplierName.trim()) {
+      setSubmitMessage("Nom du fournisseur requis.");
+      return;
+    }
+    api
+      .updateSupplier(selectedSupplierId, { nom: supplierName.trim(), adresse: supplierAddress.trim() || null })
+      .then((updated) => {
+        setSuppliers((prev) => prev.map((s) => (s.id === updated.id ? { ...updated } : s)));
+        setSubmitMessage("Fournisseur mis à jour.");
+      })
+      .catch((err) => {
+        setSubmitMessage(err instanceof Error ? err.message : "Impossible de mettre à jour le fournisseur");
+      });
+  };
+
   const handleCreateOrder = async () => {
     setSubmitMessage(null);
     if (!validateForm()) return;
@@ -467,7 +487,7 @@ export function SupplierOrdersSection() {
                     onChange={(event) =>
                       handleSelectSupplier(event.target.value)
                     }
-                    disabled={!canManageSupplierOrders || isSuperAdmin}
+                    disabled={!canManageSupplierOrders}
                   >
                     <option value="">Sélectionner...</option>
                     {suppliers.map((supplier) => (
@@ -481,9 +501,19 @@ export function SupplierOrdersSection() {
                       type="button"
                       className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-100 disabled:opacity-50"
                       onClick={() => handleDeleteSupplier(selectedSupplierId)}
-                      disabled={!canManageSupplierOrders || isSuperAdmin}
+                      disabled={!canManageSupplierOrders}
                     >
                       Supprimer
+                    </button>
+                  ) : null}
+                  {selectedSupplierId ? (
+                    <button
+                      type="button"
+                      className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                      onClick={handleUpdateSupplier}
+                      disabled={!canManageSupplierOrders}
+                    >
+                      Mettre à jour
                     </button>
                   ) : null}
                 </div>
@@ -505,7 +535,7 @@ export function SupplierOrdersSection() {
                     placeholder="Ex : Fournitures Duport"
                     value={supplierName}
                     onChange={(event) => setSupplierName(event.target.value)}
-                    disabled={!canManageSupplierOrders || isSuperAdmin}
+                    disabled={!canManageSupplierOrders}
                   />
                 </label>
                 <label className="text-sm font-medium text-slate-700">
@@ -518,7 +548,7 @@ export function SupplierOrdersSection() {
                     onChange={(event) =>
                       setSupplierAddress(event.target.value)
                     }
-                    disabled={!canManageSupplierOrders || isSuperAdmin}
+                    disabled={!canManageSupplierOrders}
                   />
                 </label>
               </div>

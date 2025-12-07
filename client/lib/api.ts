@@ -305,6 +305,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateSupplier: (id: string, payload: { nom: string; adresse?: string | null }) =>
+    request<{ id: string; nom: string; adresse: string | null }>(`/fournisseurs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   deleteUser: (id: string) =>
     request<void>(`/users/${id}`, {
       method: "DELETE",
