@@ -1,0 +1,40 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: gestion_stock
+    ports:
+      - "${MYSQL_PORT}:3306"
+    volumes:
+      - db_data_dev:/var/lib/mysql
+
+  server:
+    build:
+      context: ./server
+    command: sh -c "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate dev && npm run dev"
+    env_file:
+      - .env.dev
+    volumes:
+      - ./server:/app
+    depends_on:
+      - db
+    ports:
+      - "${SERVER_PORT}:4000"
+
+  client:
+    build:
+      context: ./client
+    command: npm run dev
+    env_file:
+      - .env.dev
+    volumes:
+      - ./client:/app
+    depends_on:
+      - server
+    ports:
+      - "${CLIENT_PORT}:3000"
+
+volumes:
+  db_data_dev:
