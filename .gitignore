@@ -13,3 +13,5 @@ server/.env
 
 # Root env files
 .env
+.env.dev
+.env.prod
