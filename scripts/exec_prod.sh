@@ -2,7 +2,7 @@
 set -euo pipefail
 
 COMPOSE_FILE="docker-compose.prod.yml"
-ENV_FILE=".env.prod"
+ENV_FILE=".env"
 BUILD_IMAGES=1
 RUN_PRUNE=1
 SERVICES=""
