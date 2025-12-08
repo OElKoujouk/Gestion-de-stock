@@ -3,12 +3,12 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: gestion_stock
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-devpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-gestion_stock}
     volumes:
       - db_data:/var/lib/mysql
     ports:
-      - "3307:3306"
+      - "${MYSQL_PORT:-3307}:3306"
 
   server:
     build:
@@ -16,26 +16,28 @@ services:
     command: sh -c "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate deploy && npm run start"
     environment:
       NODE_ENV: production
-      DATABASE_URL: mysql://root:root@db:3306/gestion_stock
-      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL:-mysql://root:devpassword@db:3306/gestion_stock}
+      PORT: ${SERVER_PORT:-4000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
     depends_on:
       - db
     ports:
-      - "4000:4000"
+      - "${SERVER_PORT:-4000}:4000"
 
   client:
     build:
       context: ./client
       args:
-        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     command: sh -c "npm run start -- -H 0.0.0.0 -p 3000"
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     depends_on:
       - server
     ports:
-      - "3000:3000"
+      - "${CLIENT_PORT:-3000}:3000"
 
 volumes:
   db_data:
