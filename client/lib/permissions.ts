@@ -1,5 +1,7 @@
 import type { RoleSelection } from "@/types/roles";
 
+/* ─────────────────── Sections ─────────────────── */
+
 export type SectionId =
   | "establishments"
   | "admin"
@@ -11,7 +13,7 @@ export type SectionId =
   | "users"
   | "auth";
 
-export const SECTION_ORDER: SectionId[] = [
+export const SECTION_ORDER: readonly SectionId[] = [
   "establishments",
   "admin",
   "responsable",
@@ -21,14 +23,22 @@ export const SECTION_ORDER: SectionId[] = [
   "supplierOrders",
   "users",
   "auth",
-] as const;
+];
 
-export type AbilityKey = "manageCategories" | "manageProducts" | "manageSupplierOrders" | "manageMovements";
+/* ─────────────────── Abilities ─────────────────── */
+
+export type AbilityKey =
+  | "manageCategories"
+  | "manageProducts"
+  | "manageSupplierOrders"
+  | "manageMovements";
 
 export type UserPermissions = {
   allowedSections: SectionId[];
   abilities: Partial<Record<AbilityKey, boolean>>;
 };
+
+/* ─────────────────── Defaults ─────────────────── */
 
 const DEFAULT_SECTIONS_BY_ROLE: Record<RoleSelection, SectionId[]> = {
   superAdmin: ["establishments", "responsable", "products", "movements", "supplierOrders", "users"],
@@ -64,6 +74,8 @@ const DEFAULT_ABILITIES_BY_ROLE: Record<RoleSelection, Partial<Record<AbilityKey
   },
 };
 
+/* ─────────────────── UI Helpers ─────────────────── */
+
 export const ALL_SECTIONS: { id: SectionId; label: string }[] = [
   { id: "establishments", label: "Etablissements" },
   { id: "admin", label: "Mon etablissement" },
@@ -76,38 +88,60 @@ export const ALL_SECTIONS: { id: SectionId; label: string }[] = [
   { id: "auth", label: "Authentification" },
 ];
 
-const ABILITY_KEYS: AbilityKey[] = ["manageCategories", "manageProducts", "manageSupplierOrders", "manageMovements"];
+const ABILITY_KEYS: readonly AbilityKey[] = [
+  "manageCategories",
+  "manageProducts",
+  "manageSupplierOrders",
+  "manageMovements",
+];
+
+/* ─────────────────── API ─────────────────── */
 
 export function defaultPermissionsForRole(role: RoleSelection): UserPermissions {
   return {
-    allowedSections: DEFAULT_SECTIONS_BY_ROLE[role] ?? [],
+    allowedSections: [...(DEFAULT_SECTIONS_BY_ROLE[role] ?? [])],
     abilities: { ...(DEFAULT_ABILITIES_BY_ROLE[role] ?? {}) },
   };
 }
 
+type RawPermissions = {
+  allowedSections?: unknown;
+  abilities?: unknown;
+};
+
 export function normalizePermissions(raw: unknown, role: RoleSelection): UserPermissions {
   const defaults = defaultPermissionsForRole(role);
-  const allowedSections = Array.isArray((raw as any)?.allowedSections)
-    ? ((raw as any).allowedSections as unknown[]).filter((value): value is SectionId => SECTION_ORDER.includes(value as SectionId))
+  const safeRaw: RawPermissions = typeof raw === "object" && raw !== null ? raw : {};
+
+  const allowedSections: SectionId[] = Array.isArray(safeRaw.allowedSections)
+    ? safeRaw.allowedSections.filter(
+        (value): value is SectionId =>
+          typeof value === "string" && SECTION_ORDER.includes(value as SectionId),
+      )
     : defaults.allowedSections;
 
   const abilities: Partial<Record<AbilityKey, boolean>> = { ...defaults.abilities };
-  if (raw && typeof raw === "object" && (raw as any).abilities && typeof (raw as any).abilities === "object") {
-    const provided = (raw as any).abilities as Record<string, unknown>;
+
+  if (typeof safeRaw.abilities === "object" && safeRaw.abilities !== null) {
     ABILITY_KEYS.forEach((key) => {
-      if (typeof provided[key] === "boolean") {
-        abilities[key] = Boolean(provided[key]);
+      const value = (safeRaw.abilities as Record<string, unknown>)[key];
+      if (typeof value === "boolean") {
+        abilities[key] = value;
       }
     });
   }
 
   return {
-    allowedSections: allowedSections.length > 0 ? Array.from(new Set(allowedSections)) : defaults.allowedSections,
+    allowedSections: allowedSections.length
+      ? Array.from(new Set(allowedSections))
+      : defaults.allowedSections,
     abilities,
   };
 }
 
-export function hasAbility(permissions: UserPermissions | undefined, ability: AbilityKey) {
+export function hasAbility(
+  permissions: UserPermissions | undefined,
+  ability: AbilityKey,
+): boolean {
   return Boolean(permissions?.abilities?.[ability]);
 }
-

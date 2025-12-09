@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -64,12 +64,16 @@ export function StoreManagerSection() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
-    if (isSuperAdmin) {
-      api
-        .getEstablishments()
-        .then((data) => setEstablishments(data.map((e: any) => ({ id: e.id, nom: e.nom }))))
-        .catch(() => setEstablishments([]));
-    }
+    if (!isSuperAdmin) return;
+
+    api
+      .getEstablishments()
+      .then((data: Array<{ id: string; nom: string }>) => {
+        setEstablishments(data.map((e) => ({ id: e.id, nom: e.nom })));
+      })
+      .catch(() => {
+        setEstablishments([]);
+      });
   }, [isSuperAdmin]);
 
   useEffect(() => {
@@ -101,29 +105,47 @@ export function StoreManagerSection() {
   );
   const sortedArticles = useMemo(() => [...articles].sort((a, b) => a.nom.localeCompare(b.nom)), [articles]);
 
-  const fetchDemandes = () => {
+  const fetchDemandes = useCallback(() => {
     setDemandesLoading(true);
-    const params = isSuperAdmin && selectedTenantId ? { etablissementId: selectedTenantId } : undefined;
+
+    const params =
+      isSuperAdmin && selectedTenantId
+        ? { etablissementId: selectedTenantId }
+        : undefined;
+
     api
       .getDemandes(params)
-      .then((data) => {
+      .then((data: Demande[]) => {
         setDemandes(data);
         setDemandesError(null);
+
         const defaults: Record<string, number> = {};
-        data.forEach((demande: Demande) => {
+        data.forEach((demande) => {
           demande.items.forEach((item) => {
-            defaults[item.id] = item.quantitePreparee > 0 ? item.quantitePreparee : item.quantiteDemandee;
+            defaults[item.id] =
+              item.quantitePreparee > 0
+                ? item.quantitePreparee
+                : item.quantiteDemandee;
           });
         });
+
         setQuantityEdits(defaults);
       })
-      .catch((err) => setDemandesError(err instanceof Error ? err.message : "Impossible de charger les demandes"))
+      .catch((err: unknown) =>
+        setDemandesError(
+          err instanceof Error
+            ? err.message
+            : "Impossible de charger les demandes",
+        ),
+      )
       .finally(() => setDemandesLoading(false));
-  };
+  }, [isSuperAdmin, selectedTenantId]);
+
 
   useEffect(() => {
     fetchDemandes();
-  }, [selectedTenantId, isSuperAdmin]);
+  }, [fetchDemandes, selectedTenantId, isSuperAdmin]);
+
 
   useEffect(() => {
     if (!toast) return;
@@ -237,7 +259,7 @@ export function StoreManagerSection() {
           {articles.length === 0 ? (
             <p className="text-sm text-slate-500">Chargement des articles...</p>
           ) : lowStockArticles.length === 0 ? (
-            <p className="text-sm text-emerald-600">Aucun produit n'est actuellement au seuil.</p>
+            <p className="text-sm text-emerald-600">Aucun produit n&apos;est actuellement au seuil.</p>
           ) : (
             <div className="mt-4 space-y-3">
               {lowStockArticles.map((article) => {

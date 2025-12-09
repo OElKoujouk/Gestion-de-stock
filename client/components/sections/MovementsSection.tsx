@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+// client/components/sections/MovementsSection.tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -72,10 +73,8 @@ export function MovementsSection() {
   const [selectedTenantId, setSelectedTenantId] = useState("");
 
   const [agentFilter, setAgentFilter] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<"all" | "preparee" | "modifiee" | "refusee">("all");
-  const [sortMode, setSortMode] =
-    useState<"date_desc" | "date_asc">("date_desc");
+  const [statusFilter, setStatusFilter] = useState<"all" | "preparee" | "modifiee" | "refusee">("all");
+  const [sortMode, setSortMode] = useState<"date_desc" | "date_asc">("date_desc");
   const [refQuery, setRefQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
 
@@ -88,30 +87,31 @@ export function MovementsSection() {
 
     api
       .getEstablishments()
-      .then((data) =>
-        setEstablishments(data.map((e) => ({ id: e.id, nom: e.nom }))),
-      )
+      .then((data) => setEstablishments(data.map((e) => ({ id: e.id, nom: e.nom }))))
       .catch(() => setEstablishments([]));
   }, [isSuperAdmin]);
 
   /* ───────── Fetch mouvements ───────── */
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    const params =
-      isSuperAdmin && selectedTenantId
-        ? { etablissementId: selectedTenantId }
-        : undefined;
+
+    const params = isSuperAdmin && selectedTenantId ? { etablissementId: selectedTenantId } : undefined;
 
     Promise.all([api.getDemandes(params), api.getArticles(params)])
       .then(([demandeData, articleData]) => {
         setDemandes(demandeData as Demande[]);
-        setArticles(articleData.map((a: any) => ({ id: a.id, nom: a.nom })));
+
+        const mappedArticles: Article[] = (articleData as Array<{ id: string; nom: string }>).map((a) => ({
+          id: a.id,
+          nom: a.nom,
+        }));
+
+        setArticles(mappedArticles);
         setError(null);
       })
-      .catch(() =>
-        setError("Impossible de charger l’historique des mouvements"),
-      )
+      .catch(() => setError("Impossible de charger l’historique des mouvements"))
       .finally(() => setLoading(false));
   }, [isSuperAdmin, selectedTenantId]);
 
@@ -151,20 +151,25 @@ export function MovementsSection() {
     return map;
   }, [demandesRefSorted]);
 
-  const demandeCode = (demande: Demande) => demande.reference ?? `CMD-${demande.id.slice(-6).toUpperCase()}`;
+  const demandeCode = useCallback((demande: Demande) => {
+    return demande.reference ?? `CMD-${demande.id.slice(-6).toUpperCase()}`;
+  }, []);
 
-  const formatDemandeRef = (demande: Demande) => {
-    const index = demandeRefIndex.get(demande.id) ?? 0;
-    return demandeCode(demande);
-  };
+  const formatDemandeRef = useCallback(
+    (demande: Demande) => {
+      // on garde l’index si besoin plus tard
+      void demandeRefIndex.get(demande.id);
+      return demandeCode(demande);
+    },
+    [demandeCode, demandeRefIndex],
+  );
 
   const filtered = useMemo(() => {
     const query = refQuery.trim().toLowerCase();
+
     return mouvements
       .filter((d) => (agentFilter ? d.agent?.id === agentFilter : true))
-      .filter((d) =>
-        statusFilter === "all" ? true : d.statut === statusFilter,
-      )
+      .filter((d) => (statusFilter === "all" ? true : d.statut === statusFilter))
       .filter((d) => {
         if (!query) return true;
         const ref = formatDemandeRef(d).toLowerCase();
@@ -176,9 +181,12 @@ export function MovementsSection() {
         const db = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime();
         return sortMode === "date_desc" ? db - da : da - db;
       });
-  }, [mouvements, agentFilter, statusFilter, sortMode, refQuery]);
+  }, [mouvements, agentFilter, statusFilter, sortMode, refQuery, formatDemandeRef]);
 
-  const visibleMouvements = useMemo(() => (showAll ? filtered : filtered.slice(0, 3)), [filtered, showAll]);
+  const visibleMouvements = useMemo(
+    () => (showAll ? filtered : filtered.slice(0, 3)),
+    [filtered, showAll],
+  );
 
   /* ───────────────────── Render ───────────────────── */
 
@@ -232,7 +240,11 @@ export function MovementsSection() {
 
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
+            onChange={(e) =>
+              setStatusFilter(
+                e.target.value as "all" | "preparee" | "modifiee" | "refusee",
+              )
+            }
             className="rounded-full border px-3 py-1 text-sm"
           >
             <option value="all">Tous statuts</option>
@@ -243,7 +255,9 @@ export function MovementsSection() {
 
           <select
             value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as any)}
+            onChange={(e) =>
+              setSortMode(e.target.value as "date_desc" | "date_asc")
+            }
             className="rounded-full border px-3 py-1 text-sm"
           >
             <option value="date_desc">Plus récentes</option>
@@ -254,10 +268,7 @@ export function MovementsSection() {
 
       {/* Liste */}
       <Card>
-        <CardHeader
-          title="Historique"
-          subtitle={`${filtered.length} mouvement(s)`}
-        />
+        <CardHeader title="Historique" subtitle={`${filtered.length} mouvement(s)`} />
 
         {loading ? (
           <p className="text-sm text-slate-500">Chargement…</p>
@@ -268,10 +279,7 @@ export function MovementsSection() {
         ) : (
           <div className="mt-4 space-y-3">
             {visibleMouvements.map((d) => {
-              const status = d.statut as Exclude<
-                DemandeStatus,
-                "en_attente"
-              >;
+              const status = d.statut as Exclude<DemandeStatus, "en_attente">;
               const isOpen = openId === d.id;
 
               return (
@@ -340,11 +348,9 @@ export function MovementsSection() {
                       </div>
                       <ul className="space-y-2 text-sm">
                         {d.items.map((item) => {
-                          const article =
-                            articleIndex.get(item.articleId);
+                          const article = articleIndex.get(item.articleId);
                           const qty =
-                            item.quantitePreparee ||
-                            item.quantiteDemandee;
+                            item.quantitePreparee || item.quantiteDemandee;
 
                           return (
                             <li
@@ -375,7 +381,9 @@ export function MovementsSection() {
                   onClick={() => setShowAll((prev) => !prev)}
                   className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  {showAll ? "Voir moins" : `Voir les ${filtered.length - 3} autres`}
+                  {showAll
+                    ? "Voir moins"
+                    : `Voir les ${filtered.length - 3} autres`}
                 </button>
               </div>
             )}

@@ -137,7 +137,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
               >
                 <option value="admin">Administrateur etablissement</option>
                 <option value="responsable">Responsable magasin</option>
-                <option value="agent">Agent d'exploitation</option>
+                <option value="agent">Agent d&apos;exploitation</option>
               </select>
             </label>
             {canSelectTenant ? (
