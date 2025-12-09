@@ -786,7 +786,7 @@ export function ProductsSection() {
                               )}
                               {inAlert ? (
                                 <span className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
-                                  Niveau d'alerte atteint (quantite ≤ seuil)
+                                  Niveau d&apos;alerte atteint (quantité ≤ seuil)
                                 </span>
                               ) : null}
                             </div>
