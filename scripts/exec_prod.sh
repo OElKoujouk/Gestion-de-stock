@@ -1,107 +1,57 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
+PROJECT_DIR="/home/deploy/Gestion-de-stock" # chemin racine du projet à déployer
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_FILE=".env"
-BUILD_IMAGES=1
-RUN_PRUNE=1
-SERVICES=""
 
-usage() {
-  cat <<EOF
-Usage: $(basename "$0") [options]
+echo "🚀 Déploiement PROD (Docker) en cours..."
 
-Options:
-  --env-file <path>     Fichier .env à utiliser (défaut: .env.prod)
-  --compose-file <path> Fichier docker-compose (défaut: docker-compose.prod.yml)
-  --no-build            Ne pas forcer la reconstruction des images
-  --services "a b"      Limiter le déploiement à certains services
-  --skip-prune          Ne pas lancer 'docker image prune'
-  -h, --help            Affiche cette aide
-EOF
-}
+# Se place dans le dossier du projet avant toute commande
+cd "$PROJECT_DIR"
 
-log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-}
+echo "📦 Répertoire de déploiement : $PROJECT_DIR"
 
-trap 'log "❌ Déploiement interrompu (code $?)."' ERR
+# Avertit si la branche Git active n'est pas main
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  echo "⚠️  Attention : tu es sur la branche '$CURRENT_BRANCH' (attendu : 'main')"
+  # exit 1
+fi
 
-while (($#)); do
-  case "$1" in
-    --env-file)
-      ENV_FILE="$2"
-      shift 2
-      ;;
-    --compose-file)
-      COMPOSE_FILE="$2"
-      shift 2
-      ;;
-    --no-build)
-      BUILD_IMAGES=0
-      shift
-      ;;
-    --services)
-      SERVICES="$2"
-      shift 2
-      ;;
-    --skip-prune)
-      RUN_PRUNE=0
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Option inconnue: $1" >&2
-      usage
-      exit 1
-      ;;
-  esac
-done
-
-if ! command -v docker >/dev/null 2>&1; then
-  echo "❌ Docker n'est pas installé ou introuvable dans le PATH." >&2
+# Récupère les dernières modifications (merge fast-forward uniquement)
+echo "⬇️  git pull --ff-only"
+if ! git pull --ff-only; then
+  echo "❌ ERREUR : git pull a échoué (conflit ou historique non linéaire)"
   exit 1
 fi
 
+# Vérifie la présence du fichier d'environnement requis pour le compose
 if [ ! -f "$ENV_FILE" ]; then
   echo "❌ ERREUR : $ENV_FILE introuvable"
   exit 1
 fi
 
-if [ ! -f "$COMPOSE_FILE" ]; then
-  echo "❌ ERREUR : $COMPOSE_FILE introuvable"
-  exit 1
-fi
+echo "✅ $ENV_FILE trouvé"
 
-log "🚀 Déploiement PROD (Docker) en cours..."
-log "➡️  Fichier env : $ENV_FILE"
-log "➡️  Compose file : $COMPOSE_FILE"
+# Arrête les conteneurs en cours tout en conservant les volumes
+echo "🛑 docker compose down --remove-orphans"
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  down --remove-orphans
 
-COMPOSE_CMD=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
-UP_ARGS=(up -d)
-if (( BUILD_IMAGES )); then
-  UP_ARGS+=(--build)
-fi
+# Reconstruit et relance les conteneurs en arrière-plan
+echo "🚢 docker compose up -d --build"
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  up -d --build
 
-if [ -n "$SERVICES" ]; then
-  # Permet soit des espaces, soit des virgules
-  IFS=', ' read -r -a SERVICE_LIST <<< "$SERVICES"
-  UP_ARGS+=("${SERVICE_LIST[@]}")
-fi
+echo "✅ Containers PROD à jour"
 
-log "⚙️  Mise à jour des containers..."
-"${COMPOSE_CMD[@]}" "${UP_ARGS[@]}"
-log "✅ Containers PROD à jour"
+# Nettoie les images Docker non utilisées (dangling)
+echo "🧹 Nettoyage des images Docker inutilisées (dangling)"
+docker image prune -f
 
-log "ℹ️  État courant :"
-"${COMPOSE_CMD[@]}" ps
-
-if (( RUN_PRUNE )); then
-  log "🧹 Nettoyage des images orphelines..."
-  docker image prune -f
-fi
-
-log "🎉 Déploiement PROD terminé"
+echo "🎉 Déploiement PROD terminé"
