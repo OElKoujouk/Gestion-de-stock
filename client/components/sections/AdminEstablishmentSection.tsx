@@ -19,6 +19,7 @@ type Establishment = {
   codePostal: string | null;
   ville: string | null;
 };
+
 type UserSummary = {
   id: string;
   nom: string;
@@ -29,6 +30,7 @@ type UserSummary = {
   actif: boolean;
   permissions: UserPermissions;
 };
+
 type ArticleSummary = {
   id: string;
   nom: string;
@@ -49,6 +51,7 @@ export function AdminEstablishmentSection() {
   const { role } = useAuth();
   const isTenantAdmin = role === "admin";
   const isSuperAdmin = role === "superAdmin";
+
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +61,11 @@ export function AdminEstablishmentSection() {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [articlesLoading, setArticlesLoading] = useState(false);
   const [articlesError, setArticlesError] = useState<string | null>(null);
+
   const [selectedEtablissementId, setSelectedEtablissementId] = useState<string | null>(null);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -84,7 +89,7 @@ export function AdminEstablishmentSection() {
       const data = await api.getEstablishments();
       setEstablishments(data);
       setError(null);
-      setSelectedEtablissementId((prev) => (prev ?? data[0]?.id ?? null));
+      setSelectedEtablissementId((prev) => prev ?? data[0]?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger les etablissements");
     } finally {
@@ -174,6 +179,7 @@ export function AdminEstablishmentSection() {
       setSelectedEtablissementId(establishments[0].id);
     }
   }, [establishments, selectedEtablissementId]);
+
   useEffect(() => {
     if (!isSuperAdmin && currentUserTenantId) {
       setSelectedEtablissementId(currentUserTenantId);
@@ -196,7 +202,10 @@ export function AdminEstablishmentSection() {
   const filteredArticles = articles;
   const categoryNameById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.nom])), [categories]);
 
-  const lowStockArticles = useMemo(() => articles.filter((article) => article.quantite <= article.seuilAlerte), [articles]);
+  const lowStockArticles = useMemo(
+    () => articles.filter((article) => article.quantite <= article.seuilAlerte),
+    [articles],
+  );
 
   const handleCreated = (establishment: Establishment) => {
     setEstablishments((prev) => [establishment, ...prev]);
@@ -221,6 +230,7 @@ export function AdminEstablishmentSection() {
     () => (selectedEtablissement ? users.filter((user) => user.etablissementId === selectedEtablissement.id) : []),
     [users, selectedEtablissement],
   );
+
   const filteredAssignedUsers = useMemo(() => {
     let list = assignedUsers;
     if (selectedRoleFilter) {
@@ -228,9 +238,11 @@ export function AdminEstablishmentSection() {
     }
     return list.filter((user) => user.id !== currentUserId);
   }, [assignedUsers, currentUserId, selectedRoleFilter]);
+
   const VISIBLE_LIMIT = 3;
   const limitedUsers = showAllUsers ? filteredAssignedUsers : filteredAssignedUsers.slice(0, VISIBLE_LIMIT);
   const canToggleUserList = filteredAssignedUsers.length > VISIBLE_LIMIT;
+
   const ESTABLISHMENTS_VISIBLE_LIMIT = 2;
   const displayedEstablishments = useMemo(() => {
     if (showAllEstablishments) {
@@ -249,6 +261,7 @@ export function AdminEstablishmentSection() {
     }
     return list;
   }, [establishments, selectedEtablissementId, showAllEstablishments]);
+
   const canToggleEstablishments = establishments.length > ESTABLISHMENTS_VISIBLE_LIMIT;
 
   const roleCounts = assignedUsers.reduce(
@@ -311,7 +324,10 @@ export function AdminEstablishmentSection() {
     setUserDialogOpen(false);
     void fetchUsers();
     const contact = user.contactEmail ? ` · ${user.contactEmail}` : "";
-    setToast({ message: `Role cree : ${user.nom} (${user.identifiant}${contact}) en ${ROLE_LABELS[user.role] ?? user.role}`, type: "success" });
+    setToast({
+      message: `Role cree : ${user.nom} (${user.identifiant}${contact}) en ${ROLE_LABELS[user.role] ?? user.role}`,
+      type: "success",
+    });
   };
 
   const handleOpenEdit = (user: UserSummary) => {
@@ -345,6 +361,7 @@ export function AdminEstablishmentSection() {
   };
 
   const roleDisplayOrder: Array<keyof typeof ROLE_LABELS> = ["admin", "responsable", "agent"];
+
   const inventoryCsv = useMemo(() => {
     if (!selectedEtablissement || filteredArticles.length === 0) {
       return "";
@@ -369,7 +386,9 @@ export function AdminEstablishmentSection() {
       String(article.quantite),
       String(article.seuilAlerte),
     ]);
-    return [header, ...rows].map((row) => row.join(";")).join("\n");
+    return [header, ...rows]
+      .map((row) => row.join(";"))
+      .join("\n");
   }, [categoryNameById, filteredArticles, selectedEtablissement]);
 
   const handleDownloadInventory = () => {
@@ -475,7 +494,9 @@ export function AdminEstablishmentSection() {
                         <p className="font-semibold">{etab.nom}</p>
                         <p className="text-xs">Cree le {new Date(etab.createdAt).toLocaleDateString()}</p>
                         <p className="text-xs text-slate-500">{etab.adresse ?? "Adresse non renseignee"}</p>
-                        <p className="text-xs text-slate-500">{[etab.codePostal, etab.ville].filter(Boolean).join(" ") || "Localisation non renseignee"}</p>
+                        <p className="text-xs text-slate-500">
+                          {[etab.codePostal, etab.ville].filter(Boolean).join(" ") || "Localisation non renseignee"}
+                        </p>
                       </div>
                       <span
                         className={cn(
@@ -530,12 +551,13 @@ export function AdminEstablishmentSection() {
             ) : establishments.length === 0 ? (
               <p className="text-sm text-slate-500">Aucun etablissement pour le moment.</p>
             ) : (
-              <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white/80 px-4 py-3 shadow-sm">
+              <div className="flex items-center justify_between rounded-xl border border-slate-100 bg-white/80 px-4 py-3 shadow-sm">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-500">Etablissement</p>
                   <p className="text-lg font-semibold text-slate-900">{establishments[0].nom}</p>
                   <p className="text-xs text-slate-500">
-                    {[establishments[0].codePostal, establishments[0].ville].filter(Boolean).join(" ") || "Localisation non renseignee"}
+                    {[establishments[0].codePostal, establishments[0].ville].filter(Boolean).join(" ") ||
+                      "Localisation non renseignee"}
                   </p>
                 </div>
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Actif</span>
@@ -570,11 +592,13 @@ export function AdminEstablishmentSection() {
                   );
                 })}
               </div>
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-700">Comptes rattaches</p>
                   <p className="text-xs text-slate-500">
-                    {usersLoading ? "Chargement des utilisateurs..." : `${assignedUsers.length} utilisateur(s)`} (admin / responsable / agent)
+                    {usersLoading ? "Chargement des utilisateurs..." : `${assignedUsers.length} utilisateur(s)`} (admin /
+                    responsable / agent)
                   </p>
                 </div>
                 <button
@@ -586,6 +610,7 @@ export function AdminEstablishmentSection() {
                   Creer un role
                 </button>
               </div>
+
               <div className="divide-y divide-slate-100 rounded-2xl border border-slate-100">
                 {usersLoading ? (
                   <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
@@ -599,13 +624,13 @@ export function AdminEstablishmentSection() {
                       const isSelf = currentUserId === user.id;
                       return (
                         <div key={user.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                        <div>
-                          <p className="font-semibold text-slate-900">{user.nom}</p>
-                          <p className="text-xs text-slate-500">
-                            {user.identifiant}
-                            {user.contactEmail ? ` · ${user.contactEmail}` : ""}
-                          </p>
-                        </div>
+                          <div>
+                            <p className="font-semibold text-slate-900">{user.nom}</p>
+                            <p className="text-xs text-slate-500">
+                              {user.identifiant}
+                              {user.contactEmail ? ` · ${user.contactEmail}` : ""}
+                            </p>
+                          </div>
                           <div className="flex items-center gap-3">
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                               {ROLE_LABELS[user.role] ?? user.role}
@@ -643,9 +668,7 @@ export function AdminEstablishmentSection() {
                           onClick={() => setShowAllUsers((prev) => !prev)}
                           className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
-                          {showAllUsers
-                            ? "Voir moins"
-                            : `Voir les ${filteredAssignedUsers.length - VISIBLE_LIMIT} autres`}
+                          {showAllUsers ? "Voir moins" : `Voir les ${filteredAssignedUsers.length - VISIBLE_LIMIT} autres`}
                         </button>
                       </div>
                     ) : null}
@@ -667,14 +690,16 @@ export function AdminEstablishmentSection() {
           ) : articlesError ? (
             <p className="px-4 py-3 text-sm text-rose-600">{articlesError}</p>
           ) : lowStockArticles.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-emerald-600">Aucun article n'est sous son seuil d'alerte.</p>
+            <p className="px-4 py-3 text-sm text-emerald-600">
+              Aucun article n&apos;est sous son seuil d&apos;alerte.
+            </p>
           ) : (
             <div className="mt-3 grid gap-3 px-4 pb-4 md:grid-cols-2">
               {lowStockArticles.map((article) => (
                 <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
                   <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
-                      <p className="text-xs text-slate-600">
-                        Stock: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
+                  <p className="text-xs text-slate-600">
+                    Stock: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
                     <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
                   </p>
                   <p className="text-[11px] text-slate-500">Reference: {article.referenceFournisseur ?? "N/A"}</p>
@@ -704,8 +729,12 @@ export function AdminEstablishmentSection() {
                     <p className="text-xs text-slate-500">Export CSV + partage email.</p>
                   </div>
                   <div className="flex gap-2 text-xs text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-800">{filteredArticles.length} articles</span>
-                    <span className="rounded-full bg-slate-50 px-3 py-1 font-semibold text-slate-600">{categories.length} categories</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-800">
+                      {filteredArticles.length} articles
+                    </span>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 font-semibold text-slate-600">
+                      {categories.length} categories
+                    </span>
                   </div>
                 </div>
                 <div className="mt-4 flex flex-col gap-3 md:flex-row">
@@ -715,7 +744,7 @@ export function AdminEstablishmentSection() {
                     className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
                     disabled={!inventoryCsv}
                   >
-                    Telecharger l'inventaire (.csv)
+                    Telecharger l&apos;inventaire (.csv)
                   </button>
                   <div className="flex flex-1 flex-col gap-2 md:flex-row">
                     <input
@@ -738,9 +767,11 @@ export function AdminEstablishmentSection() {
                 {emailError ? <p className="text-xs font-semibold text-rose-600">{emailError}</p> : null}
               </div>
               <div className="text-xs text-slate-500">
-                {filteredArticles.length === 0
-                  ? "Aucun article n'est associe a cet etablissement pour le moment."
-                  : `Inventaire compile sur ${filteredArticles.length} article(s) repartis sur ${categories.length} categorie(s).`}
+                {filteredArticles.length === 0 ? (
+                  <>Aucun article n&apos;est associe a cet etablissement pour le moment.</>
+                ) : (
+                  `Inventaire compile sur ${filteredArticles.length} article(s) repartis sur ${categories.length} categorie(s).`
+                )}
               </div>
               {categoriesError ? <p className="text-xs font-semibold text-rose-600">{categoriesError}</p> : null}
             </div>
@@ -750,14 +781,17 @@ export function AdminEstablishmentSection() {
         )}
       </Card>
 
-      <CreateEstablishmentForm open={establishmentDialogOpen} onOpenChange={setEstablishmentDialogOpen} onCreated={handleCreated} />
+      <CreateEstablishmentForm
+        open={establishmentDialogOpen}
+        onOpenChange={setEstablishmentDialogOpen}
+        onCreated={handleCreated}
+      />
+
       <EditEstablishmentDialog
         open={editEstablishmentDialogOpen}
         establishment={editingEstablishment}
         onOpenChange={handleEditEstablishmentOpenChange}
-        onUpdated={(updated) => {
-          handleEstablishmentUpdated(updated);
-        }}
+        onUpdated={handleEstablishmentUpdated}
       />
 
       {selectedEtablissement ? (
@@ -780,6 +814,7 @@ export function AdminEstablishmentSection() {
         establishments={establishments}
         canSelectTenant={false}
       />
+
       {toast ? (
         <div
           className={cn(

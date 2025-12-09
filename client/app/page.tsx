@@ -91,7 +91,6 @@ export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentRole, setCurrentRole] = useState<RoleSelection | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("auth");
-  const [hydrated, setHydrated] = useState(false);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
 
@@ -104,6 +103,14 @@ export default function HomePage() {
     return ["auth"] as SectionId[];
   }, [isAuthenticated, currentRole, permissions]);
 
+  // Section active sécurisée (évite le setState dans un effect)
+  const safeActiveSection = useMemo<SectionId>(() => {
+    if (sectionsToDisplay.includes(activeSection)) {
+      return activeSection;
+    }
+    return sectionsToDisplay[0] ?? "auth";
+  }, [activeSection, sectionsToDisplay]);
+
   const hasAbility = useCallback(
     (ability: AbilityKey) => {
       return checkAbility(permissions ?? undefined, ability);
@@ -112,68 +119,74 @@ export default function HomePage() {
   );
 
   useEffect(() => {
-    if (!sectionsToDisplay.includes(activeSection)) {
-      setActiveSection(sectionsToDisplay[0] ?? "auth");
-    }
-  }, [sectionsToDisplay, activeSection]);
-
-  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
+
     const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
     const storedRole = sessionStorage.getItem(ROLE_STORAGE_KEY);
     const initialHash = window.location.hash.replace("#", "");
     const storedName = sessionStorage.getItem(USER_NAME_STORAGE_KEY);
+
     if (storedToken && isRoleSelection(storedRole)) {
       setAccessToken(storedToken);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsAuthenticated(true);
       setCurrentRole(storedRole);
       setCurrentUserName(storedName ?? null);
+
       const storedPermissionsRaw = sessionStorage.getItem(PERMISSIONS_STORAGE_KEY);
       const storedPermissions = storedPermissionsRaw ? (JSON.parse(storedPermissionsRaw) as UserPermissions) : null;
+
       if (storedPermissions) {
         setPermissions(storedPermissions);
       }
+
       const allowedSections =
         storedPermissions?.allowedSections?.length
           ? storedPermissions.allowedSections
           : defaultPermissionsForRole(storedRole).allowedSections;
+
       setActiveSection(allowedSections[0] ?? "auth");
     } else if (isSectionId(initialHash)) {
       setActiveSection(initialHash);
     }
-    setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
+
     const handleHashChange = () => {
       const newHash = window.location.hash.replace("#", "");
+
       if (!isAuthenticated && newHash !== "auth") {
         setActiveSection("auth");
         return;
       }
+
       if (!isSectionId(newHash)) {
         return;
       }
+
       if (isAuthenticated && !sectionsToDisplay.includes(newHash)) {
-        setActiveSection(sectionsToDisplay[0]);
+        setActiveSection(sectionsToDisplay[0] ?? "auth");
         return;
       }
+
       setActiveSection(newHash);
     };
+
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, [isAuthenticated, sectionsToDisplay]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.location.hash = activeSection;
+      window.location.hash = safeActiveSection;
     }
-  }, [activeSection]);
+  }, [safeActiveSection]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -181,14 +194,15 @@ export default function HomePage() {
       document.body.scrollTop = 0;
       document.documentElement.scrollTop = 0;
     }
-  }, [activeSection]);
+  }, [safeActiveSection]);
 
   useEffect(() => {
     if (!isAuthenticated || !currentRole) return;
+
     api
       .me()
       .then((user) => {
-        const normalized = normalizePermissions(user.permissions as any, mapApiRoleToSelection(user.role));
+        const normalized = normalizePermissions(user.permissions, mapApiRoleToSelection(user.role));
         setPermissions(normalized);
         sessionStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(normalized));
       })
@@ -197,19 +211,25 @@ export default function HomePage() {
 
   const handleLogin = (token: string, role: RoleSelection, userName: string, userPermissions?: UserPermissions) => {
     setAccessToken(token);
+
     if (typeof window !== "undefined") {
       sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
       sessionStorage.setItem(ROLE_STORAGE_KEY, role);
       sessionStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+
       if (userPermissions) {
         sessionStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(userPermissions));
       } else {
         sessionStorage.removeItem(PERMISSIONS_STORAGE_KEY);
       }
     }
+
     const normalizedPermissions = userPermissions ? normalizePermissions(userPermissions, role) : defaultPermissionsForRole(role);
+
     setPermissions(normalizedPermissions);
+
     const allowedSections = normalizedPermissions.allowedSections;
+
     setIsAuthenticated(true);
     setCurrentRole(role);
     setCurrentUserName(userName);
@@ -223,6 +243,7 @@ export default function HomePage() {
       sessionStorage.removeItem(USER_NAME_STORAGE_KEY);
       sessionStorage.removeItem(PERMISSIONS_STORAGE_KEY);
     }
+
     setAccessToken(null);
     setIsAuthenticated(false);
     setCurrentRole(null);
@@ -244,12 +265,15 @@ export default function HomePage() {
     if (!isAuthenticated) {
       return publicNavGroups;
     }
+
     if (!currentRole) {
       return baseNavGroups;
     }
+
     const allowed = new Set<SectionId>(
       permissions?.allowedSections?.length ? permissions.allowedSections : defaultPermissionsForRole(currentRole).allowedSections,
     );
+
     return baseNavGroups.map((group) => ({
       ...group,
       items: group.items.filter((item) => allowed.has(item.id)),
@@ -265,9 +289,9 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar groups={sidebarGroups} active={activeSection} onSelect={setActiveSection} />
+      <Sidebar groups={sidebarGroups} active={safeActiveSection} onSelect={setActiveSection} />
       <div className="flex flex-1 flex-col lg:ml-72">
-        <MobileNav groups={sidebarGroups} active={activeSection} onSelect={setActiveSection} />
+        <MobileNav groups={sidebarGroups} active={safeActiveSection} onSelect={setActiveSection} />
         <AuthProvider value={{ role: currentRole, isAuthenticated, permissions, hasAbility }}>
           <main className="flex-1 space-y-5 px-4 py-6 sm:px-6 lg:px-12">
             <div className="rounded-2xl bg-gradient-to-r from-emerald-50 via-emerald-100 to-emerald-200 px-4 py-4 shadow-sm shadow-emerald-200/60">
@@ -287,7 +311,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex flex-col items-end gap-2 text-xs text-slate-800">
                   <span className="rounded-full bg-emerald-200 px-3 py-1 font-semibold text-emerald-900">
-                    {sidebarGroups.flatMap((g) => g.items).find((i) => i.id === activeSection)?.label ?? "Authentification"}
+                    {sidebarGroups.flatMap((g) => g.items).find((i) => i.id === safeActiveSection)?.label ?? "Authentification"}
                   </span>
                   {isAuthenticated && currentRole ? (
                     <button
@@ -308,7 +332,7 @@ export default function HomePage() {
                 <section
                   key={id}
                   id={id}
-                  className={cn("space-y-6 transition-opacity duration-200", activeSection !== id && "hidden")}
+                  className={cn("space-y-6 transition-opacity duration-200", safeActiveSection !== id && "hidden")}
                 >
                   {id === "auth" ? <AuthSection onAuthenticated={handleLogin} /> : <Component />}
                 </section>

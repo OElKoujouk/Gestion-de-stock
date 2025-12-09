@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+﻿// client/components/sections/AuthSection.tsx
+import { useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { api } from "@/lib/api";
@@ -21,11 +22,13 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
     event.preventDefault();
     setError(null);
     setLoading(true);
+
     try {
       const response = await api.login({ email, password });
 
       const role = mapApiRoleToSelection(response.user.role);
-      const permissions = normalizePermissions(response.user.permissions as any, role);
+      const rawPermissions = response.user.permissions as UserPermissions;
+      const permissions = normalizePermissions(rawPermissions, role);
 
       if (!rememberInTab) {
         sessionStorage.clear();
@@ -34,9 +37,7 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
       onAuthenticated?.(response.token, role, response.user.nom, permissions);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible de se connecter pour le moment."
+        err instanceof Error ? err.message : "Impossible de se connecter pour le moment.",
       );
     } finally {
       setLoading(false);
@@ -45,7 +46,7 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
 
   return (
     <div className="py-10">
-      <Card className="w-full max-w-lg border border-slate-200 bg-white/80 backdrop-blur-md shadow-xl rounded-2xl">
+      <Card className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white/80 shadow-xl backdrop-blur-md">
         <CardHeader
           title="Connexion"
           subtitle="Accédez à votre espace sécurisé"
@@ -73,7 +74,7 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
             />
           </label>
 
-          {/* Password */}
+          {/* Mot de passe */}
           <label className="text-sm font-medium text-slate-800">
             Mot de passe
             <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-200">
@@ -83,7 +84,7 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
                 autoComplete="current-password"
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="••••••••"
-                className="w-full border-none bg-transparent p-0 text-sm focus:outline-none focus:ring-0 appearance-none shadow-none"
+                className="w-full appearance-none border-none bg-transparent p-0 text-sm shadow-none focus:outline-none focus:ring-0"
                 required
               />
 
@@ -97,7 +98,7 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
             </div>
           </label>
 
-          {/* Remember */}
+          {/* Souvenir dans l’onglet */}
           <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
             <input
               type="checkbox"
@@ -108,7 +109,7 @@ export function AuthSection({ onAuthenticated }: AuthSectionProps) {
             Rester connecté dans cet onglet
           </label>
 
-          {/* Button */}
+          {/* Bouton */}
           <div className="flex justify-end">
             <button
               type="submit"
