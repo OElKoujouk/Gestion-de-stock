@@ -1,34 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
+# Petit wrapper pour compatibilité :
+#   ./scripts/ci-deploy.sh prod    -> ./scripts/exec_prod.sh
+#   ./scripts/ci-deploy.sh staging -> ./scripts/exec_staging.sh
+
 ENVIRONMENT="${1:-}"
-TARGET_BRANCH="${2:-}"
 
-if [[ -z "$ENVIRONMENT" ]]; then
-  echo "Usage: $0 <staging|prod> <branch>"
-  exit 1
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ "$ENVIRONMENT" == "prod" ]]; then
-  ENV_FILE=".env.prod"
-  COMPOSE_FILE="docker-compose.prod.yml"
-  BRANCH="${TARGET_BRANCH:-main}"
-else
-  ENVIRONMENT="staging"
-  ENV_FILE=".env.dev"
-  COMPOSE_FILE="docker-compose.dev.yml"
-  BRANCH="${TARGET_BRANCH:-develop}"
-fi
+case "$ENVIRONMENT" in
+  prod|production)
+    exec "${SCRIPT_DIR}/exec_prod.sh"
+    ;;
 
-test -f "$ENV_FILE" || { echo "Missing $ENV_FILE"; exit 1; }
-test -f "$COMPOSE_FILE" || { echo "Missing $COMPOSE_FILE"; exit 1; }
+  staging|preprod)
+    exec "${SCRIPT_DIR}/exec_staging.sh"
+    ;;
 
-echo "🚀 Deploy $ENVIRONMENT — branch $BRANCH"
-
-git fetch --all --prune
-git checkout "$BRANCH"
-git pull
-
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down --remove-orphans
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
-docker image prune -f
+  *)
+    echo "Usage: $0 <prod|staging>"
+    exit 1
+    ;;
+esac

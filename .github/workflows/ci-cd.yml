@@ -1,4 +1,4 @@
-name: CI/CD
+name: CI / CD
 
 on:
   push:
@@ -6,14 +6,19 @@ on:
       - develop
       - release
       - main
+  pull_request:
+    branches:
+      - develop
+      - release
+      - main
 
 concurrency:
   group: ci-cd-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
-    name: Build and Test (${{ matrix.project }})
+    name: Build & Test (${{ matrix.project }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -41,11 +46,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ✅ Prisma GENERATE obligatoire pour le SERVER
+      # Prisma generate (ne touche pas à la DB, OK en CI)
       - name: Generate Prisma Client
         if: matrix.project == 'server'
-        env:
-          DATABASE_URL: mysql://root:root@localhost:3306/gestion_stock
         run: npx prisma generate
 
       - name: Lint
@@ -56,21 +59,22 @@ jobs:
 
       - name: Build
         env:
+          NODE_ENV: production
+          # Ces vars servent juste à la build, pas de vraie DB derrière
           NEXT_PUBLIC_API_URL: http://localhost:4000/api
           JWT_SECRET: ci-secret
           DATABASE_URL: mysql://root:root@localhost:3306/gestion_stock
           PORT: 4000
-          NODE_ENV: production
         run: npm run build
 
   deploy-staging:
-    name: Deploy staging
+    name: Deploy STAGING (release -> staging.logifly.fr)
     needs: build-and-test
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release'
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/release'
 
     steps:
-      - name: Deploy on staging
+      - name: Deploy on STAGING (SSH)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.STAGING_SSH_HOST }}
@@ -79,20 +83,33 @@ jobs:
           port: ${{ secrets.STAGING_SSH_PORT || '22' }}
           script: |
             set -e
+
+            # On va dans le repo sur le VPS
             cd ${{ secrets.STAGING_REMOTE_PATH }}
-            git fetch --all --prune
-            git checkout ${{ github.ref_name }}
-            git pull
-            bash scripts/ci-deploy.sh staging ${{ github.ref_name }}
+
+            # On force bien la branche release sur le serveur
+            git fetch origin
+            git checkout release
+            git reset --hard origin/release
+
+            # On s'assure que le script est exécutable
+            chmod +x scripts/exec_staging.sh
+
+            # Déploiement STAGING :
+            # - démarre DB staging
+            # - copie la DB de prod vers staging
+            # - applique les migrations Prisma
+            # - (re)build & restart containers staging
+            ./scripts/exec_staging.sh
 
   deploy-prod:
-    name: Deploy production
+    name: Deploy PROD (main -> logifly.fr)
     needs: build-and-test
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy on production
+      - name: Deploy on PRODUCTION (SSH)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PROD_SSH_HOST }}
@@ -101,8 +118,12 @@ jobs:
           port: ${{ secrets.PROD_SSH_PORT || '22' }}
           script: |
             set -e
+
             cd ${{ secrets.PROD_REMOTE_PATH }}
-            git fetch --all --prune
+
+            git fetch origin
             git checkout main
-            git pull
-            bash scripts/ci-deploy.sh prod main
+            git reset --hard origin/main
+
+            chmod +x scripts/exec_prod.sh
+            ./scripts/exec_prod.sh
