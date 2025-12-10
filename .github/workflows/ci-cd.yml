@@ -13,7 +13,7 @@ on:
       - main
 
 concurrency:
-  group: ci-cd-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -46,9 +46,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Prisma generate (ne touche pas à la DB, OK en CI)
-      - name: Generate Prisma Client
+      # Prisma generate (ne touche pas à la DB, on lui donne juste une URL factice)
+      - name: Generate Prisma Client (server)
         if: matrix.project == 'server'
+        env:
+          DATABASE_URL: mysql://root:root@localhost:3306/ci_dummy
         run: npx prisma generate
 
       - name: Lint
@@ -60,10 +62,9 @@ jobs:
       - name: Build
         env:
           NODE_ENV: production
-          # Ces vars servent juste à la build, pas de vraie DB derrière
           NEXT_PUBLIC_API_URL: http://localhost:4000/api
           JWT_SECRET: ci-secret
-          DATABASE_URL: mysql://root:root@localhost:3306/gestion_stock
+          DATABASE_URL: mysql://root:root@localhost:3306/ci_dummy
           PORT: 4000
         run: npm run build
 
@@ -80,26 +81,17 @@ jobs:
           host: ${{ secrets.STAGING_SSH_HOST }}
           username: ${{ secrets.STAGING_SSH_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
-          port: ${{ secrets.STAGING_SSH_PORT || '22' }}
+          port: ${{ secrets.STAGING_SSH_PORT }}
           script: |
             set -e
 
-            # On va dans le repo sur le VPS
             cd ${{ secrets.STAGING_REMOTE_PATH }}
 
-            # On force bien la branche release sur le serveur
             git fetch origin
             git checkout release
             git reset --hard origin/release
 
-            # On s'assure que le script est exécutable
             chmod +x scripts/exec_staging.sh
-
-            # Déploiement STAGING :
-            # - démarre DB staging
-            # - copie la DB de prod vers staging
-            # - applique les migrations Prisma
-            # - (re)build & restart containers staging
             ./scripts/exec_staging.sh
 
   deploy-prod:
@@ -115,7 +107,7 @@ jobs:
           host: ${{ secrets.PROD_SSH_HOST }}
           username: ${{ secrets.PROD_SSH_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          port: ${{ secrets.PROD_SSH_PORT || '22' }}
+          port: ${{ secrets.PROD_SSH_PORT }}
           script: |
             set -e
 
