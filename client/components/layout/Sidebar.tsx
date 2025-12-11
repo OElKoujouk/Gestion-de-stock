@@ -19,7 +19,7 @@ type SidebarProps<T extends string = string> = {
 
 export function Sidebar<T extends string>({ groups, active, onSelect }: SidebarProps<T>) {
   return (
-    <aside className="lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col border-r border-white/10 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 px-6 py-8 text-slate-100">
+    <aside className="hidden border-r border-white/10 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 px-6 py-8 text-slate-100 lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col">
       {/* Header */}
       <div className="hidden lg:flex items-center justify-between">
         <div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { api } from "@/lib/api";
@@ -23,6 +23,17 @@ export function CreateEstablishmentForm({ open, onOpenChange, onCreated }: Props
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -46,8 +57,8 @@ export function CreateEstablishmentForm({ open, onOpenChange, onCreated }: Props
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-xl">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/45 px-4 py-8 backdrop-blur-sm sm:px-6">
+      <div className="mx-auto w-full max-w-xl">
         <Card className="border border-emerald-100/80 bg-gradient-to-br from-white via-emerald-50/50 to-white shadow-xl shadow-emerald-900/5">
           <CardHeader title="Nouvel etablissement" subtitle="Chaque etablissement dispose de son tenant isole" />
           <form className="mt-3 space-y-4" onSubmit={handleSubmit}>
@@ -94,7 +105,7 @@ export function CreateEstablishmentForm({ open, onOpenChange, onCreated }: Props
             {error ? (
               <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-inner">{error}</div>
             ) : null}
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}

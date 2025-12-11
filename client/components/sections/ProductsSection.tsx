@@ -375,7 +375,7 @@ export function ProductsSection() {
           showCategoriesManager || showProductsManager ? (
             <div className="grid gap-6 lg:grid-cols-2">
             {showCategoriesManager ? (
-              <Card className="bg-gradient-to-br from-slate-50 to-white">
+              <Card className="bg-gradient-to-br from-slate-50 to-white min-w-0">
                 <CardHeader title="Catégories" subtitle="Organisez votre catalogue" />
                 {loading.categories ? (
                   <p className="text-sm text-slate-500">Chargement...</p>
@@ -514,7 +514,7 @@ export function ProductsSection() {
                 >
                   <label className="text-sm font-medium text-slate-700">
                     Nouvelle catégorie
-                    <div className="mt-1 flex gap-3">
+                    <div className="mt-1 flex flex-col gap-3 sm:flex-row">
                       <input
                         type="text"
                         value={categoryName}
@@ -525,7 +525,7 @@ export function ProductsSection() {
                       />
                       <button
                         type="submit"
-                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+                        className="w-full rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 sm:w-auto"
                         disabled={categorySubmitting || !canManageCategories}
                       >
                         {categorySubmitting ? "Ajout..." : "Ajouter"}
@@ -545,7 +545,7 @@ export function ProductsSection() {
             ) : null}
 
             {showProductsManager ? (
-              <Card className="bg-gradient-to-br from-white to-slate-50">
+              <Card className="bg-gradient-to-br from-white to-slate-50 min-w-0">
                 <CardHeader title="Créer un produit" subtitle="Réservé à l’établissement sélectionné" />
                 <form className="space-y-4" onSubmit={handleCreateArticle}>
                   <div className="grid gap-4">
@@ -633,7 +633,7 @@ export function ProductsSection() {
                     </label>
                   </div>
                   {articleError ? <p className="text-sm text-rose-600">{articleError}</p> : null}
-                  <div className="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col items-stretch gap-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                     <span>
                       {canManageProducts
                         ? "Complétez les champs obligatoires avant de créer le produit."
@@ -641,7 +641,7 @@ export function ProductsSection() {
                     </span>
                     <button
                       type="submit"
-                      className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+                      className="w-full rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 sm:w-auto"
                       disabled={articleSubmitting || !canManageProducts}
                     >
                       {articleSubmitting ? "Création..." : "Créer le produit"}
@@ -691,7 +691,8 @@ export function ProductsSection() {
         ) : articlesGroupedByCategory.length === 0 ? (
           <p className="text-sm text-slate-500">Aucun article pour le moment.</p>
         ) : (
-          <div className="mt-3 space-y-3 text-sm">
+          <div className="mt-3 overflow-x-auto">
+            <div className="min-w-full space-y-3 text-sm md:min-w-[720px]">
             {articlesGroupedByCategory.map((group) => {
               const groupAlert = group.items.some(
                 (article) => article.quantite <= article.seuilAlerte,
@@ -937,6 +938,7 @@ export function ProductsSection() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
       </Card>

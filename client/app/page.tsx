@@ -309,7 +309,7 @@ export default function HomePage() {
                     )}
                   </p>
                 </div>
-                <div className="flex flex-col items-end gap-2 text-xs text-slate-800">
+                <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-slate-800">
                   <span className="rounded-full bg-emerald-200 px-3 py-1 font-semibold text-emerald-900">
                     {sidebarGroups.flatMap((g) => g.items).find((i) => i.id === safeActiveSection)?.label ?? "Authentification"}
                   </span>

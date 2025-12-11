@@ -13,10 +13,14 @@ services:
   server:
     build:
       context: ./server
+      dockerfile: Dockerfile.dev
     command: sh -c "./scripts/wait-for-it.sh db:3306 -- npx prisma migrate dev && npm run dev"
-    user: "0"
     env_file:
       - .env.dev
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+      TSC_WATCHFILE: UseFsEventsWithFallbackDynamicPolling
     volumes:
       - ./server:/app
     depends_on:
@@ -27,10 +31,19 @@ services:
   client:
     build:
       context: ./client
-    command: npm run dev
-    user: "0"
+      dockerfile: Dockerfile.dev
+    command: sh -c "npm run dev -- --hostname 0.0.0.0 --port 3000 --webpack"
     env_file:
       - .env.dev
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "100"
+      WATCHPACK_POLLING: "true"
+      WATCHPACK_POLL_INTERVAL: "100"
+      NEXT_WEBPACK_USEPOLLING: "true"
+      NEXT_DISABLE_TURBOPACK: "1"
+      TSC_WATCHFILE: UseFsEventsWithFallbackDynamicPolling
+      TAILWIND_MODE: watch
     volumes:
       - ./client:/app
     depends_on:

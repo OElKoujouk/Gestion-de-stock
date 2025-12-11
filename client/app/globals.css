@@ -20,3 +20,19 @@
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30;
   }
 }
+
+/* Fallback responsive switch for la page Utilisateurs (table -> cartes) */
+@media (max-width: 639px) {
+  .users-table-wrapper {
+    display: none !important;
+  }
+  .users-cards {
+    display: block;
+  }
+}
+
+@media (min-width: 640px) {
+  .users-cards {
+    display: none;
+  }
+}
