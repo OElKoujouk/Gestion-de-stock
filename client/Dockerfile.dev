@@ -1,0 +1,14 @@
+FROM node:20
+
+WORKDIR /app
+
+# Installer les dépendances
+COPY package*.json ./
+RUN npm install
+
+# Facultatif : copier tout le code
+# (sera écrasé par le volume, mais permet au watcher de démarrer correctement)
+COPY . .
+
+# Lancer le serveur de développement
+CMD ["npm", "run", "dev"]

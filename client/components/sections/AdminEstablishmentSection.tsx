@@ -593,7 +593,7 @@ export function AdminEstablishmentSection() {
                 })}
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-slate-700">Comptes rattaches</p>
                   <p className="text-xs text-slate-500">
@@ -604,7 +604,7 @@ export function AdminEstablishmentSection() {
                 <button
                   type="button"
                   onClick={openUserModal}
-                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  className="w-full rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto"
                   disabled={!selectedEtablissement}
                 >
                   Creer un role
@@ -623,7 +623,10 @@ export function AdminEstablishmentSection() {
                     {limitedUsers.map((user) => {
                       const isSelf = currentUserId === user.id;
                       return (
-                        <div key={user.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                        <div
+                          key={user.id}
+                          className="flex flex-col gap-3 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                        >
                           <div>
                             <p className="font-semibold text-slate-900">{user.nom}</p>
                             <p className="text-xs text-slate-500">
@@ -631,12 +634,12 @@ export function AdminEstablishmentSection() {
                               {user.contactEmail ? ` · ${user.contactEmail}` : ""}
                             </p>
                           </div>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                               {ROLE_LABELS[user.role] ?? user.role}
                             </span>
                             {!isSelf ? (
-                              <>
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => handleOpenEdit(user)}
@@ -653,7 +656,7 @@ export function AdminEstablishmentSection() {
                                 >
                                   {deletingUserId === user.id ? "Suppression..." : "Supprimer"}
                                 </button>
-                              </>
+                              </div>
                             ) : (
                               <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Vous</span>
                             )}
