@@ -5,16 +5,17 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      # DOIT être cohérent avec ton DATABASE_URL
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-gestion_stock}
     volumes:
       - db_data:/var/lib/mysql
-    # Port exposé sur l'hôte (différent entre prod/staging via .env)
+
+    # Port exposé sur l'hôte (dépend du .env)
     ports:
       - "127.0.0.1:${MYSQL_PORT:-3307}:3306"
+
     healthcheck:
-      # $$ pour que Docker laisse passer la variable d'env au container
+      # $$ pour que Docker laisse passer la variable
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD || exit 1"]
       interval: 5s
       timeout: 5s
@@ -24,19 +25,20 @@ services:
     build:
       context: ./server
     restart: unless-stopped
-    # Prisma migrations manuelles si tu veux, donc on ne les met pas ici
+
     command: npm run start
+
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       PORT: ${SERVER_PORT:-4000}
       CORS_ORIGIN: ${CORS_ORIGIN}
       JWT_SECRET: ${JWT_SECRET}
+
     depends_on:
       db:
         condition: service_healthy
-    # 🔥 IMPORTANT : on expose le même port à l’extérieur ET dans le container
-    # Comme ça en prod tu peux garder 4000, et en staging mettre 4001 dans .env.staging
+
     ports:
       - "127.0.0.1:${SERVER_PORT:-4000}:${SERVER_PORT:-4000}"
 
@@ -45,14 +47,19 @@ services:
       context: ./client
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+
     restart: unless-stopped
+
     depends_on:
       server:
         condition: service_started
+
     command: sh -c "npm run start -- -H 0.0.0.0 -p 3000"
+
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
+
     ports:
       - "127.0.0.1:${CLIENT_PORT:-3000}:3000"
 

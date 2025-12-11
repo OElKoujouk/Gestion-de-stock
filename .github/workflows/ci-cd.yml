@@ -46,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Prisma generate (ne touche pas à la DB, on lui donne juste une URL factice)
+      # Prisma generate (ne touche pas à la DB, URL factice suffisante)
       - name: Generate Prisma Client (server)
         if: matrix.project == 'server'
         env:

@@ -12,7 +12,6 @@ STAGING_PROJECT_NAME="gestion-de-stock-staging"
 EXPECTED_BRANCH="release"
 
 # ---------- CONFIG BDD ----------
-# ⚠️ Doit correspondre à tes .env (prod / staging)
 PROD_DB_USER="root"
 PROD_DB_PASS="root"
 PROD_DB_NAME="gestion_stock"
