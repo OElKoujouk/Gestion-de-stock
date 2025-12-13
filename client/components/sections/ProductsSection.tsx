@@ -156,7 +156,6 @@ export function ProductsSection() {
     setSelectedArticleIds(new Set());
     void fetchCategories(targetTenantId);
     void fetchArticles(targetTenantId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canLoadInventory, targetTenantId]);
 
   /* --------------------- Création / édition catégories --------------------- */
@@ -1140,6 +1139,5 @@ export function ProductsSection() {
     </div>
   );
 }
-
 
 

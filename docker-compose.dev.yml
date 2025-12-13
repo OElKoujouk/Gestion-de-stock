@@ -23,6 +23,7 @@ services:
       TSC_WATCHFILE: UseFsEventsWithFallbackDynamicPolling
     volumes:
       - ./server:/app
+      - /app/node_modules
     depends_on:
       - db
     ports:
@@ -46,6 +47,7 @@ services:
       TAILWIND_MODE: watch
     volumes:
       - ./client:/app
+      - /app/node_modules
     depends_on:
       - server
     ports:

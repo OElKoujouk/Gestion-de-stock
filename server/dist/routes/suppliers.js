@@ -5,12 +5,17 @@ const express_1 = require("express");
 const prisma_1 = require("../prisma");
 const role_1 = require("../middleware/role");
 exports.suppliersRouter = (0, express_1.Router)();
-exports.suppliersRouter.use((0, role_1.allowRoles)("admin", "responsable"));
+exports.suppliersRouter.use((0, role_1.allowRoles)("admin", "responsable", "superadmin"));
 exports.suppliersRouter.get("/", async (req, res) => {
-    if (!req.tenantId)
+    const etablissementId = req.user?.role === "superadmin"
+        ? req.query.etablissementId
+            ? String(req.query.etablissementId)
+            : null
+        : req.tenantId;
+    if (!etablissementId)
         return res.status(400).json({ message: "Tenant requis" });
     const suppliers = await prisma_1.prisma.supplier.findMany({
-        where: { etablissementId: req.tenantId },
+        where: { etablissementId },
         orderBy: { nom: "asc" },
     });
     res.json(suppliers);
