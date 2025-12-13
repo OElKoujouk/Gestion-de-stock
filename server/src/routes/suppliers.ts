@@ -4,12 +4,20 @@ import { allowRoles } from "../middleware/role";
 
 export const suppliersRouter = Router();
 
-suppliersRouter.use(allowRoles("admin", "responsable"));
+suppliersRouter.use(allowRoles("admin", "responsable", "superadmin"));
 
 suppliersRouter.get("/", async (req, res) => {
-  if (!req.tenantId) return res.status(400).json({ message: "Tenant requis" });
+  const etablissementId =
+    req.user?.role === "superadmin"
+      ? req.query.etablissementId
+        ? String(req.query.etablissementId)
+        : null
+      : req.tenantId;
+
+  if (!etablissementId) return res.status(400).json({ message: "Tenant requis" });
+
   const suppliers = await prisma.supplier.findMany({
-    where: { etablissementId: req.tenantId },
+    where: { etablissementId },
     orderBy: { nom: "asc" },
   });
   res.json(suppliers);

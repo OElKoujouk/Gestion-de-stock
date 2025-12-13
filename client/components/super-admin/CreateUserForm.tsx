@@ -16,6 +16,7 @@ type Props = {
     contactEmail?: string | null;
     role: string;
     etablissementId: string | null;
+    domaine?: string | null;
     permissions: UserPermissions;
   }) => void;
   establishments: Array<{ id: string; nom: string }>;
@@ -40,6 +41,7 @@ export function CreateUserForm({
     motDePasse: "",
     role: "responsable" as RoleSelection,
     etablissementId: "",
+    domaine: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,7 +49,7 @@ export function CreateUserForm({
 
   useEffect(() => {
     if (!open) {
-      setForm({ nom: "", identifiant: "", email: "", motDePasse: "", role: "responsable", etablissementId: "" });
+      setForm({ nom: "", identifiant: "", email: "", motDePasse: "", role: "responsable", etablissementId: "", domaine: "" });
       setPermissions(defaultPermissionsForRole("responsable"));
       setError(null);
       setLoading(false);
@@ -87,6 +89,7 @@ export function CreateUserForm({
         contactEmail: form.email || null,
         motDePasse: form.motDePasse,
         role: form.role,
+        domaine: form.domaine || null,
         etablissementId:
           forcedTenantId !== undefined
             ? forcedTenantId || null
@@ -152,6 +155,16 @@ export function CreateUserForm({
               />
             </label>
             <label className="text-sm font-semibold text-slate-800">
+              Domaine / pôle (ex. Informatique, Ménage)
+              <input
+                type="text"
+                value={form.domaine}
+                onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
+                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              placeholder="Informatique, Ménage..."
+            />
+          </label>
+            <label className="text-sm font-semibold text-slate-800">
               Rôle
               <select
                 value={form.role}
@@ -164,7 +177,7 @@ export function CreateUserForm({
               >
                 <option value="admin">Administrateur établissement</option>
                 <option value="responsable">Responsable magasin</option>
-                <option value="agent">Agent d&apos;exploitation</option>
+                <option value="agent">Agent d&apos;entretien</option>
               </select>
             </label>
             <UserPermissionsFields role={form.role} value={permissions} onChange={setPermissions} />
@@ -217,5 +230,3 @@ export function CreateUserForm({
     </div>
   );
 }
-
-

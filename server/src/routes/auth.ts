@@ -46,6 +46,7 @@ authRouter.post("/login", async (req, res) => {
       etablissement_id: user.etablissementId,
       nom: user.nom,
       email: user.identifiant,
+      domaine: user.domaine,
       permissions,
     },
   });
@@ -68,6 +69,7 @@ authRouter.get("/me", authMiddleware, async (req, res) => {
       contactEmail: true,
       role: true,
       etablissementId: true,
+      domaine: true,
       permissions: true,
     },
   });
@@ -81,6 +83,7 @@ authRouter.get("/me", authMiddleware, async (req, res) => {
     contactEmail: user.contactEmail,
     role: user.role,
     etablissementId: user.etablissementId,
+    domaine: user.domaine,
     permissions: normalizePermissions(user.permissions, user.role),
   });
 });

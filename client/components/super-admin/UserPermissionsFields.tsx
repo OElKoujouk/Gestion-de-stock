@@ -38,7 +38,7 @@ export function UserPermissionsFields({ role, value, onChange }: Props) {
     <div className="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-emerald-900">Navigation visible</p>
+          <p className="text-sm font-semibold text-emerald-900">Permissions</p>
           <p className="text-xs text-emerald-800">Sélectionnez les sections accessibles dans la sidebar</p>
         </div>
         <button
@@ -70,7 +70,7 @@ export function UserPermissionsFields({ role, value, onChange }: Props) {
       </div>
 
       <div className="space-y-3">
-        <p className="text-sm font-semibold text-emerald-900">Permissions fines</p>
+        <p className="text-sm font-semibold text-emerald-900">Permissions</p>
         <div className="grid gap-2 sm:grid-cols-2">
           {(Object.keys(ABILITY_LABELS) as AbilityKey[]).map((ability) => {
             const active = Boolean(value.abilities?.[ability]);
@@ -97,4 +97,3 @@ export function UserPermissionsFields({ role, value, onChange }: Props) {
     </div>
   );
 }
-

@@ -1,317 +1,3 @@
-﻿"use client";
-
-import { useEffect, useMemo, useState } from "react";
-import jsPDF from "jspdf";
-
-import { Card, CardHeader } from "@/components/ui/card";
-import { SectionHeader } from "@/components/ui/section-header";
-import { useAuth } from "@/context/auth-context";
-import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
-
-type Article = {
-  id: string;
-  nom: string;
-  quantite: number;
-  referenceFournisseur: string | null;
-  seuilAlerte: number;
-};
-
-type SupplierProfile = {
-  id: string;
-  nom: string;
-  adresse: string | null;
-};
-
-type SupplierOrder = {
-  id: string;
-  fournisseur: string;
-  statut: "en_cours" | "recue";
-  createdAt?: string;
-  updatedAt?: string;
-  supplierId?: string | null;
-  supplier?: { id: string; nom: string; adresse: string | null };
-  items: Array<{ id: string; articleId: string; quantite: number }>;
-};
-
-export function SupplierOrdersSection() {
-  const { role, hasAbility } = useAuth();
-  const isSuperAdmin = role === "superAdmin";
-  const canManageSupplierOrders = hasAbility("manageSupplierOrders");
-  const canSubmitOrders = canManageSupplierOrders && !isSuperAdmin;
-
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ State base ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
-
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [supplierName, setSupplierName] = useState("");
-  const [supplierAddress, setSupplierAddress] = useState("");
-  const [suppliers, setSuppliers] = useState<SupplierProfile[]>([]);
-  const [selectedSupplierId, setSelectedSupplierId] = useState("");
-  const [suppliersLoading, setSuppliersLoading] = useState(false);
-  const [suppliersError, setSuppliersError] = useState<string | null>(null);
-
-  const [search, setSearch] = useState("");
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-
-  const [submitting, setSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
-
-  const [orders, setOrders] = useState<SupplierOrder[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [ordersError, setOrdersError] = useState<string | null>(null);
-  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
-  const [editingItems, setEditingItems] = useState<Record<string, number>>({});
-  const [expandedOrders, setExpandedOrders] = useState<string[]>([]);
-  const [modifiedOrders, setModifiedOrders] = useState<Set<string>>(new Set());
-
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Fetch donn├®es ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
-
-  useEffect(() => {
-    setLoading(true);
-    api
-      .getArticles()
-      .then((data) => {
-        setArticles(data);
-        setError(null);
-      })
-      .catch((err) =>
-        setError(
-          err instanceof Error ? err.message : "Impossible de charger les articles",
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!canManageSupplierOrders || isSuperAdmin) {
-      setOrders([]);
-      return;
-    }
-    setOrdersLoading(true);
-    api
-      .getSupplierOrders()
-      .then((data) => {
-        setOrders(data);
-        setOrdersError(null);
-      })
-      .catch((err) =>
-        setOrdersError(
-          err instanceof Error
-            ? err.message
-            : "Impossible de charger les commandes fournisseurs",
-        ),
-      )
-      .finally(() => setOrdersLoading(false));
-  }, [canManageSupplierOrders, isSuperAdmin]);
-
-  useEffect(() => {
-    if (!canManageSupplierOrders || isSuperAdmin) {
-      setSuppliers([]);
-      return;
-    }
-    setSuppliersLoading(true);
-    api
-      .getSuppliers()
-      .then((data) => {
-        setSuppliers(data);
-        setSuppliersError(null);
-      })
-      .catch((err) =>
-        setSuppliersError(
-          err instanceof Error
-            ? err.message
-            : "Impossible de charger les fournisseurs",
-        ),
-      )
-      .finally(() => setSuppliersLoading(false));
-  }, [canManageSupplierOrders, isSuperAdmin]);
-
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ D├®riv├®s / m├®mo ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
-
-  const filteredArticles = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return articles;
-    return articles.filter(
-      (article) =>
-        article.nom.toLowerCase().includes(query) ||
-        (article.referenceFournisseur ?? "").toLowerCase().includes(query),
-    );
-  }, [articles, search]);
-
-  const selectedItems = useMemo(
-    () =>
-      articles
-        .map((article) => ({
-          articleId: article.id,
-          quantite: quantities[article.id] ?? 0,
-          article,
-        }))
-        .filter((item) => item.quantite > 0),
-    [articles, quantities],
-  );
-
-  const selectedItemsCount = selectedItems.length;
-  const selectedTotalQuantity = selectedItems.reduce(
-    (sum, item) => sum + item.quantite,
-    0,
-  );
-
-  const inProgressOrders = orders.filter(
-    (order) => order.statut === "en_cours",
-  );
-  const receivedOrders = orders.filter((order) => order.statut === "recue");
-
-  const resetSelection = () => setQuantities({});
-
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Helpers formulaire ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
-
-  const validateForm = () => {
-    if (!supplierName.trim()) {
-      setSubmitMessage("Le nom du fournisseur est requis.");
-      return false;
-    }
-    if (selectedItems.length === 0) {
-      setSubmitMessage("Choisissez au moins un produit ├á commander.");
-      return false;
-    }
-    return true;
-  };
-
-  const handleAddSupplier = (event?: React.FormEvent) => {
-    event?.preventDefault();
-    if (!supplierName.trim()) {
-      setSubmitMessage("Nom du fournisseur requis.");
-      return;
-    }
-
-    const existing = suppliers.find(
-      (s) =>
-        s.nom === supplierName.trim() &&
-        (s.adresse ?? "").trim() === supplierAddress.trim(),
-    );
-    if (existing) {
-      setSelectedSupplierId(existing.id);
-      setSubmitMessage("Fournisseur d├®j├á enregistr├®, s├®lection mise ├á jour.");
-      return;
-    }
-
-    const profile: SupplierProfile = {
-      id: "",
-      nom: supplierName.trim(),
-      adresse: supplierAddress.trim(),
-    };
-
-    api
-      .createSupplier({ nom: profile.nom, adresse: profile.adresse || null })
-      .then((created) => {
-        const enriched: SupplierProfile = {
-          ...profile,
-          id: created.id,
-          adresse: created.adresse || "",
-        };
-        setSuppliers((prev) => [enriched, ...prev]);
-        setSelectedSupplierId(created.id);
-        setSubmitMessage("Fournisseur enregistr├® en base.");
-      })
-      .catch((err) => {
-        setSubmitMessage(
-          err instanceof Error
-            ? err.message
-            : "Impossible d'enregistrer le fournisseur",
-        );
-      });
-  };
-
-  const handleSelectSupplier = (supplierId: string) => {
-    setSelectedSupplierId(supplierId);
-    const supplier = suppliers.find((s) => s.id === supplierId);
-    if (supplier) {
-      setSupplierName(supplier.nom);
-      setSupplierAddress(supplier.adresse ?? "");
-    }
-  };
-
-  const handleDeleteSupplier = (supplierId: string) => {
-    setSuppliers((prev) => prev.filter((s) => s.id !== supplierId));
-    if (selectedSupplierId === supplierId) {
-      setSelectedSupplierId("");
-      setSupplierName("");
-      setSupplierAddress("");
-    }
-  };
-
-  const handleUpdateSupplier = () => {
-    if (!selectedSupplierId) {
-      setSubmitMessage("S├®lectionnez un fournisseur ├á modifier.");
-      return;
-    }
-    if (!supplierName.trim()) {
-      setSubmitMessage("Nom du fournisseur requis.");
-      return;
-    }
-    api
-      .updateSupplier(selectedSupplierId, { nom: supplierName.trim(), adresse: supplierAddress.trim() || null })
-      .then((updated) => {
-        setSuppliers((prev) => prev.map((s) => (s.id === updated.id ? { ...updated } : s)));
-        setSubmitMessage("Fournisseur mis ├á jour.");
-      })
-      .catch((err) => {
-        setSubmitMessage(err instanceof Error ? err.message : "Impossible de mettre ├á jour le fournisseur");
-      });
-  };
-
-  const handleCreateOrder = async () => {
-    setSubmitMessage(null);
-    if (!validateForm()) return;
-
-    setSubmitting(true);
-    try {
-      const payload: {
-        fournisseur: string;
-        supplierId?: string;
-        items: Array<{ articleId: string; quantite: number }>;
-      } = {
-        fournisseur:
-          supplierAddress.trim() && !selectedSupplierId
-            ? `${supplierName.trim()} ÔÇö ${supplierAddress.trim()}`
-            : supplierName.trim(),
-        items: selectedItems.map((item) => ({
-          articleId: item.articleId,
-          quantite: item.quantite,
-        })),
-      };
-
-      if (selectedSupplierId) payload.supplierId = selectedSupplierId;
-
-      const created = await api.createSupplierOrder(payload);
-
-      setSubmitMessage("Commande fournisseur cr├®├®e avec succ├¿s.");
-      setOrders((prev) => [
-        {
-          id: created.id,
-          fournisseur: created.fournisseur,
-          supplierId: created.supplierId,
-          supplier: created.supplier,
-          statut: "en_cours",
-          items: created.items,
-        },
-        ...prev,
-      ]);
-      resetSelection();
-    } catch (err) {
-      setSubmitMessage(
-        err instanceof Error
-          ? err.message
-          : "Impossible de cr├®er la commande fournisseur",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleGenerateOrderPdf = (order: SupplierOrder) => {
     const doc = new jsPDF();
     const now = new Date();
@@ -328,9 +14,9 @@ export function SupplierOrdersSection() {
       doc.text(`Adresse : ${supplierAdresse}`, 14, 42);
     }
     if (order.statut === "en_cours") {
-      doc.text("Statut : En attente de r├®ception", 14, 49);
+      doc.text("Statut : En attente de r+�ception", 14, 49);
     } else {
-      doc.text("Statut : Re├ºue", 14, 49);
+      doc.text("Statut : Re+�ue", 14, 49);
     }
 
     doc.setFontSize(12);
@@ -341,7 +27,7 @@ export function SupplierOrdersSection() {
       doc.setFontSize(11);
       doc.text(`${index + 1}. ${label}`, 14, y);
       doc.setFontSize(10);
-      doc.text(`Quantit├®: ${item.quantite}`, 14, y + 6);
+      doc.text(`Quantit+�: ${item.quantite}`, 14, y + 6);
       doc.line(14, y + 8, 196, y + 8);
       y += 14;
     });
@@ -350,10 +36,10 @@ export function SupplierOrdersSection() {
     doc.save(`bon-commande-${safeName}.pdf`);
   };
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Commandes (├®dition / statut) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  /* ��������������������������������������� Commandes (+�dition / statut) ��������������������������������������� */
 
   const handleMarkReceived = async (orderId: string) => {
-    if (!window.confirm("├ètes-vous s├╗r de valider la r├®ception de cette commande ?")) {
+    if (!window.confirm("+�tes-vous s++r de valider la r+�ception de cette commande ?")) {
       return;
     }
     try {
@@ -398,7 +84,7 @@ export function SupplierOrdersSection() {
       setModifiedOrders((prev) => new Set(prev).add(order.id));
       setEditingOrderId(null);
       setEditingItems({});
-      setSubmitMessage("Commande mise ├á jour.");
+      setSubmitMessage("Commande mise +� jour.");
     } catch (err) {
       setOrdersError(
         err instanceof Error
@@ -416,14 +102,14 @@ export function SupplierOrdersSection() {
     );
   };
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ JSX ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  /* ��������������������������������������� JSX ��������������������������������������� */
 
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Commandes fournisseurs"
-        title="Pr├®parer un bon de commande"
-        description="S├®lectionnez les articles du stock, renseignez le fournisseur, g├®n├®rez un PDF et suivez vos commandes en cours."
+        title="Pr+�parer un bon de commande"
+        description="S+�lectionnez les articles du stock, renseignez le fournisseur, g+�n+�rez un PDF et suivez vos commandes en cours."
       />
 
       {/* Stats rapides */}
@@ -433,19 +119,19 @@ export function SupplierOrdersSection() {
             Fournisseur
           </p>
           <p className="mt-1 text-sm font-semibold text-slate-900">
-            {supplierName.trim() || "Aucun fournisseur s├®lectionn├®"}
+            {supplierName.trim() || "Aucun fournisseur s+�lectionn+�"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-sm">
           <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-            Articles s├®lectionn├®s
+            Articles s+�lectionn+�s
           </p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">
             {selectedItemsCount}
           </p>
           {selectedItemsCount > 0 ? (
             <p className="text-xs text-slate-500">
-              {selectedTotalQuantity} unit├®s au total
+              {selectedTotalQuantity} unit+�s au total
             </p>
           ) : null}
         </div>
@@ -459,9 +145,9 @@ export function SupplierOrdersSection() {
         </div>
       </div>
 
-      {/* Layout 2 colonnes : gauche (pr├®paration), droite (suivi) */}
+      {/* Layout 2 colonnes : gauche (pr+�paration), droite (suivi) */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        {/* Colonne gauche : fournisseur + s├®lection articles */}
+        {/* Colonne gauche : fournisseur + s+�lection articles */}
         <div className="space-y-6">
           {/* Fournisseur */}
           <Card className="border-slate-200">
@@ -471,7 +157,7 @@ export function SupplierOrdersSection() {
               action={
                 isSuperAdmin ? (
                   <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                    Superadmin : cr├®ez la commande via un r├┤le ├®tablissement
+                    Superadmin : cr+�ez la commande via un r+�le +�tablissement
                   </span>
                 ) : null
               }
@@ -488,7 +174,7 @@ export function SupplierOrdersSection() {
                     }
                     disabled={!canManageSupplierOrders}
                   >
-                    <option value="">S├®lectionner...</option>
+                    <option value="">S+�lectionner...</option>
                     {suppliers.map((supplier) => (
                       <option key={supplier.id} value={supplier.id}>
                         {supplier.nom}
@@ -512,7 +198,7 @@ export function SupplierOrdersSection() {
                       onClick={handleUpdateSupplier}
                       disabled={!canManageSupplierOrders}
                     >
-                      Mettre ├á jour
+                      Mettre +� jour
                     </button>
                   ) : null}
                 </div>
@@ -564,10 +250,10 @@ export function SupplierOrdersSection() {
           </div>
 
               <p className="text-xs text-slate-500">
-                Les commandes sont disponibles pour les r├┤les{" "}
+                Les commandes sont disponibles pour les r+�les{" "}
                 <span className="font-semibold">admin</span> /{" "}
-                <span className="font-semibold">responsable</span> reli├®s ├á un
-                ├®tablissement.
+                <span className="font-semibold">responsable</span> reli+�s +� un
+                +�tablissement.
               </p>
               {submitMessage ? (
                 <p className="text-sm text-slate-700">{submitMessage}</p>
@@ -579,13 +265,13 @@ export function SupplierOrdersSection() {
           <Card>
             <CardHeader
               title="Articles du stock"
-              subtitle="Choisissez les quantit├®s ├á commander"
+              subtitle="Choisissez les quantit+�s +� commander"
               action={
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="search"
-                      placeholder="Rechercher un produit ou une r├®f├®rence"
+                      placeholder="Rechercher un produit ou une r+�f+�rence"
                       className="w-64 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
@@ -595,7 +281,7 @@ export function SupplierOrdersSection() {
                       className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
                       onClick={resetSelection}
                     >
-                      Effacer les quantit├®s
+                      Effacer les quantit+�s
                     </button>
                   </div>
                   <button
@@ -604,7 +290,7 @@ export function SupplierOrdersSection() {
                     onClick={handleCreateOrder}
                     disabled={!canSubmitOrders || submitting}
                   >
-                    {submitting ? "Cr├®ation..." : "Cr├®er la commande fournisseur"}
+                    {submitting ? "Cr+�ation..." : "Cr+�er la commande fournisseur"}
                   </button>
                 </div>
               }
@@ -617,7 +303,7 @@ export function SupplierOrdersSection() {
               <p className="px-4 pb-4 text-sm text-rose-600">{error}</p>
             ) : filteredArticles.length === 0 ? (
               <p className="px-4 pb-4 text-sm text-slate-500">
-                Aucun article trouv├®.
+                Aucun article trouv+�.
               </p>
             ) : (
               <div className="divide-y divide-slate-100 text-sm">
@@ -626,9 +312,9 @@ export function SupplierOrdersSection() {
                     <span>Produit</span>
                   </div>
                   <div className="grid grid-cols-3 items-center gap-2 sm:grid-cols-4">
-                    <span className="text-center">R├®f├®rence</span>
+                    <span className="text-center">R+�f+�rence</span>
                     <span className="text-center">Stock</span>
-                    <span className="text-center">Qt├® ├á commander</span>
+                    <span className="text-center">Qt+� +� commander</span>
                     <span className="hidden text-right sm:block">Seuil</span>
                   </div>
                 </div>
@@ -659,7 +345,7 @@ export function SupplierOrdersSection() {
                         </div>
                         <div className="grid grid-cols-3 items-center gap-2 sm:grid-cols-4">
                           <span className="text-center text-slate-600">
-                            {article.referenceFournisseur ?? "ÔÇö"}
+                            {article.referenceFournisseur ?? "���"}
                           </span>
                           <span className="text-center font-semibold text-slate-900">
                             {article.quantite}
@@ -699,7 +385,7 @@ export function SupplierOrdersSection() {
           />
           {isSuperAdmin ? (
             <p className="px-4 pb-4 text-sm text-slate-500">
-              Connectez-vous avec un r├┤le ├®tablissement (admin ou responsable)
+              Connectez-vous avec un r+�le +�tablissement (admin ou responsable)
               pour consulter les commandes.
             </p>
           ) : ordersLoading ? (
@@ -744,7 +430,7 @@ export function SupplierOrdersSection() {
                             <p className="text-xs text-slate-500">
                               {order.items.length} article(s)
                               {order.createdAt
-                                ? ` ÔÇó ${new Date(
+                                ? ` ��� ${new Date(
                                     order.createdAt,
                                   ).toLocaleDateString()}`
                                 : ""}
@@ -753,7 +439,7 @@ export function SupplierOrdersSection() {
                           <div className="flex flex-wrap items-center gap-2">
                             {modifiedOrders.has(order.id) ? (
                               <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-                                Modifi├®e
+                                Modifi+�e
                               </span>
                             ) : null}
                             <button
@@ -761,7 +447,7 @@ export function SupplierOrdersSection() {
                               className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
                               onClick={() => handleGenerateOrderPdf(order)}
                             >
-                              T├®l├®charger le bon
+                              T+�l+�charger le bon
                             </button>
                             {editingOrderId === order.id ? (
                               <button
@@ -785,7 +471,7 @@ export function SupplierOrdersSection() {
                               className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500"
                               onClick={() => handleMarkReceived(order.id)}
                             >
-                              Valider la r├®ception
+                              Valider la r+�ception
                             </button>
                           </div>
                         </div>
@@ -843,8 +529,8 @@ export function SupplierOrdersSection() {
                           onClick={() => toggleExpanded(order.id)}
                         >
                           {expandedOrders.includes(order.id)
-                            ? "Masquer le d├®tail"
-                            : "Voir le d├®tail"}
+                            ? "Masquer le d+�tail"
+                            : "Voir le d+�tail"}
                         </button>
                         {expandedOrders.includes(order.id) ? (
                           <ul className="list-disc space-y-1 pl-4 text-xs text-slate-700">
@@ -855,7 +541,7 @@ export function SupplierOrdersSection() {
                                 )?.nom ?? "Article";
                               return (
                                 <li key={item.id}>
-                                  {label} ÔÇö {item.quantite}
+                                  {label} ��� {item.quantite}
                                 </li>
                               );
                             })}
@@ -875,7 +561,7 @@ export function SupplierOrdersSection() {
                       Historique
                     </p>
                     <p className="text-sm font-semibold text-slate-900">
-                      Commandes re├ºues
+                      Commandes re+�ues
                     </p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
@@ -884,7 +570,7 @@ export function SupplierOrdersSection() {
                 </div>
                 {receivedOrders.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    Aucune commande re├ºue.
+                    Aucune commande re+�ue.
                   </p>
                 ) : (
                   <ul className="space-y-2 text-sm">
@@ -900,7 +586,7 @@ export function SupplierOrdersSection() {
                           <p className="text-xs text-slate-500">
                             {order.items.length} article(s)
                             {order.updatedAt
-                              ? ` ÔÇó Re├ºue le ${new Date(
+                              ? ` ��� Re+�ue le ${new Date(
                                   order.updatedAt,
                                 ).toLocaleDateString()}`
                               : ""}
@@ -909,7 +595,7 @@ export function SupplierOrdersSection() {
                         <div className="flex flex-wrap items-center gap-2 text-[11px]">
                           {modifiedOrders.has(order.id) ? (
                             <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-                              Modifi├®e avant validation
+                              Modifi+�e avant validation
                             </span>
                           ) : null}
                           <button
@@ -917,7 +603,7 @@ export function SupplierOrdersSection() {
                             className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
                             onClick={() => handleGenerateOrderPdf(order)}
                           >
-                            T├®l├®charger le bon
+                            T+�l+�charger le bon
                           </button>
                           <button
                             type="button"
@@ -925,8 +611,8 @@ export function SupplierOrdersSection() {
                             onClick={() => toggleExpanded(order.id)}
                           >
                             {expandedOrders.includes(order.id)
-                              ? "Masquer le d├®tail"
-                              : "Voir le d├®tail"}
+                              ? "Masquer le d+�tail"
+                              : "Voir le d+�tail"}
                           </button>
                         </div>
                         {expandedOrders.includes(order.id) ? (
@@ -938,7 +624,7 @@ export function SupplierOrdersSection() {
                                 )?.nom ?? "Article";
                               return (
                                 <li key={item.id}>
-                                  {label} ÔÇö {item.quantite}
+                                  {label} ��� {item.quantite}
                                 </li>
                               );
                             })}

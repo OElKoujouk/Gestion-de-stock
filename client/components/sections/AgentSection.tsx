@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardHeader } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -10,7 +10,18 @@ type Article = {
   id: string;
   nom: string;
   quantite: number;
-  conditionnement?: string | null;
+  categorieId?: string | null;
+};
+
+type Category = {
+  id: string;
+  nom: string;
+};
+
+type Establishment = {
+  id: string;
+  nom: string;
+  responsables?: Array<{ id: string; nom: string; domaine?: string | null }>;
 };
 
 type DemandeStatus = "en_attente" | "preparee" | "modifiee" | "refusee";
@@ -27,6 +38,8 @@ type Demande = {
   statut: DemandeStatus;
   items: DemandeItem[];
   reference?: string | null;
+  validatedById?: string | null;
+  validatedByNom?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -36,7 +49,7 @@ const FAVORITES_STORAGE_KEY = "gestion-stock:agent-favorites";
 const statusLabel: Record<DemandeStatus, string> = {
   en_attente: "En attente",
   preparee: "Prete",
-  modifiee: "Modifiee",
+  modifiee: "Prete (modifiee)",
   refusee: "Annulee",
 };
 
@@ -54,6 +67,15 @@ export function AgentSection() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [articlesLoading, setArticlesLoading] = useState(true);
   const [articlesError, setArticlesError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [establishments, setEstablishments] = useState<Establishment[]>([]);
+  const [establishmentsLoading, setEstablishmentsLoading] = useState(false);
+  const [establishmentsError, setEstablishmentsError] = useState<string | null>(null);
+  const [selectedEtablissementId, setSelectedEtablissementId] = useState<string>("");
+  const [selectedResponsableId, setSelectedResponsableId] = useState<string | null>(null);
 
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [demandesLoading, setDemandesLoading] = useState(true);
@@ -94,29 +116,120 @@ export function AgentSection() {
 
   useEffect(() => {
     if (!isAuthenticated || role !== "agent") return;
+    setEstablishmentsLoading(true);
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setEstablishmentsError(null);
+
+        const meResult = await api
+          .me()
+          .then((user) => user)
+          .catch(() => null);
+
+        const userEtabId = meResult?.etablissementId ?? null;
+
+        const estabs = await api
+          .getEstablishments()
+          .catch((err) => {
+            // Agents n'ont pas l'autorisation sur la liste complete: on retombe sur leur etablissement seulement.
+            if (!userEtabId) {
+              throw err;
+            }
+            setEstablishmentsError("Magasins limites a votre compte.");
+            return [] as Establishment[];
+          });
+
+        if (cancelled) return;
+
+        const mergedEstabs =
+          estabs.length > 0
+            ? estabs
+            : userEtabId
+              ? [{ id: userEtabId, nom: "Mon magasin" }]
+              : [];
+
+        setEstablishments(mergedEstabs);
+
+        if (!selectedEtablissementId) {
+          const firstWithResponsable = mergedEstabs.find((e) => e.responsables?.length);
+          if (firstWithResponsable?.id && firstWithResponsable.responsables?.[0]) {
+            setSelectedEtablissementId(firstWithResponsable.id);
+            setSelectedResponsableId(firstWithResponsable.responsables[0].id);
+          } else if (userEtabId) {
+            setSelectedEtablissementId(userEtabId);
+          } else if (mergedEstabs.length > 0) {
+            setSelectedEtablissementId(mergedEstabs[0].id);
+          }
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setEstablishmentsError(err instanceof Error ? err.message : "Impossible de charger les magasins");
+      } finally {
+        if (!cancelled) {
+          setEstablishmentsLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, role]);
+  useEffect(() => {
+    if (!isAuthenticated || role !== "agent") {
+      return;
+    }
     setArticlesLoading(true);
-    api
-      .getArticles()
-      .then((data) => {
+    setCategoriesLoading(true);
+    const articleParams =
+      selectedEtablissementId || selectedResponsableId
+        ? { etablissementId: selectedEtablissementId || undefined, ownerId: selectedResponsableId || undefined }
+        : undefined;
+    const categoryParams =
+      selectedEtablissementId || selectedResponsableId
+        ? { etablissementId: selectedEtablissementId || undefined, ownerId: selectedResponsableId || undefined }
+        : undefined;
+    Promise.all([
+      api.getArticles(articleParams as any),
+      api.getCategories(categoryParams as any),
+    ])
+      .then(([articlesData, categoriesData]) => {
         setArticles(
-          data.map((article) => ({
+          articlesData.map((article) => ({
             id: article.id,
             nom: article.nom,
             quantite: article.quantite,
-            conditionnement: (article as { conditionnement?: string | null }).conditionnement ?? null,
+            categorieId: (article as any).categorieId ?? null,
           })),
         );
         setArticlesError(null);
+        setCategories(categoriesData);
+        setCategoriesError(null);
       })
-      .catch((err) => setArticlesError(err instanceof Error ? err.message : "Impossible de charger les articles disponibles"))
-      .finally(() => setArticlesLoading(false));
-  }, [isAuthenticated, role]);
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : "Impossible de charger les données";
+        setArticlesError(msg);
+        setCategoriesError(msg);
+      })
+      .finally(() => {
+        setArticlesLoading(false);
+        setCategoriesLoading(false);
+      });
+  }, [isAuthenticated, role, selectedEtablissementId, selectedResponsableId]);
 
   const fetchDemandes = () => {
     if (!isAuthenticated || role !== "agent") return;
     setDemandesLoading(true);
+    const params =
+      selectedEtablissementId || selectedResponsableId
+        ? { etablissementId: selectedEtablissementId || undefined, ownerId: selectedResponsableId || undefined }
+        : undefined;
     api
-      .getDemandes()
+      .getDemandes(params as any)
       .then((data) => {
         setDemandes(data);
         setDemandesError(null);
@@ -128,9 +241,32 @@ export function AgentSection() {
   useEffect(() => {
     fetchDemandes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, role]);
+  }, [isAuthenticated, role, selectedEtablissementId, selectedResponsableId]);
 
-  const availableArticles = useMemo(() => articles.filter((article) => article.quantite > 0), [articles]);
+  const availableArticles = useMemo(
+    () =>
+      articles.filter((article) => {
+        const matchesCategory = !categoryFilter || (article as any).categorieId === categoryFilter;
+        return matchesCategory && article.quantite > 0;
+      }),
+    [articles, categoryFilter],
+  );
+
+  const responsableOptions = useMemo(() => {
+    const options: Array<{ value: string; label: string }> = [];
+    const buildOptionValue = (etabId: string, respId?: string | null) => `${etabId}::${respId ?? "none"}`;
+    establishments.forEach((etab) => {
+      if (etab.responsables?.length) {
+        etab.responsables.forEach((resp) => {
+          const label = resp.domaine?.trim() || "Domaine non renseigné";
+          options.push({ value: buildOptionValue(etab.id, resp.id), label });
+        });
+      } else {
+        options.push({ value: buildOptionValue(etab.id), label: etab.nom });
+      }
+    });
+    return options;
+  }, [establishments]);
 
   const articleIndex = useMemo(() => {
     const map = new Map<string, Article>();
@@ -157,13 +293,16 @@ export function AgentSection() {
   );
 
   const inProgressDemandes = useMemo(
-    () => demandesSorted.filter((demande) => demande.statut === "en_attente" || demande.statut === "modifiee"),
+    () => demandesSorted.filter((demande) => demande.statut === "en_attente"),
     [demandesSorted],
   );
 
-  // Historique: seulement les demandes cloturees (preparee/refusee)
+  // Historique: demandes cloturees (prete ou modifiee) + refusees
   const historyDemandes = useMemo(
-    () => demandesSorted.filter((demande) => demande.statut === "preparee" || demande.statut === "refusee").slice(0, 5),
+    () =>
+      demandesSorted
+        .filter((demande) => demande.statut === "preparee" || demande.statut === "modifiee" || demande.statut === "refusee")
+        .slice(0, 5),
     [demandesSorted],
   );
   const visibleInProgress = useMemo(
@@ -195,6 +334,17 @@ export function AgentSection() {
     });
   };
 
+  const handleSelectStore = (value: string) => {
+    // value format: "{etabId}::{responsableId|none}"
+    const [etabId, respId] = value.split("::");
+    setSelectedEtablissementId(etabId);
+    setSelectedResponsableId(respId && respId !== "none" ? respId : null);
+    setCategoryFilter("");
+    setCart({});
+    setSubmitError(null);
+    setSubmitSuccess(null);
+  };
+
   const updateQuantity = (articleId: string, quantity: number, maxAllowed: number) => {
     if (Number.isNaN(quantity) || quantity < 0) return;
     if (quantity === 0) {
@@ -213,6 +363,10 @@ export function AgentSection() {
     setSubmitError(null);
     setSubmitSuccess(null);
 
+    if (establishments.length > 0 && !selectedEtablissementId) {
+      setSubmitError("Choisissez d'abord un magasin.");
+      return;
+    }
     if (selectedItems.length === 0) {
       setSubmitError("Ajoutez au moins un article a votre demande.");
       return;
@@ -266,6 +420,53 @@ export function AgentSection() {
         description="Articles ouverts, favoris, suivi des statuts (prete, modifiee, attente, refusee)."
       />
 
+      <Card className="border-slate-200">
+        <CardHeader title="Magasin et filtres" subtitle="SÃ©lectionnez l'Ã©tablissement et filtrez par catÃ©gorie" />
+        <div className="space-y-3 px-4 pb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm font-medium text-slate-700">
+              Responsable / domaine
+              <select
+                className="mt-1 w-64 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                value={`${selectedEtablissementId}::${selectedResponsableId ?? "none"}`}
+                onChange={(event) => handleSelectStore(event.target.value)}
+                disabled={establishmentsLoading}
+              >
+                <option value="">Choisir...</option>
+                {responsableOptions.map((option, index) => (
+                  <option key={`${option.value}-${index}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              CatÃ©gorie
+              <select
+                className="mt-1 w-56 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                disabled={categoriesLoading || (establishments.length > 0 && !selectedEtablissementId)}
+              >
+                <option value="">Toutes</option>
+                <option value="none">Sans catÃ©gorie</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.nom}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="text-xs text-slate-500">
+              {establishmentsLoading ? "Chargement des magasins..." : establishmentsError ?? ""}
+            </div>
+            <div className="text-xs text-rose-600">{categoriesError}</div>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader
@@ -290,7 +491,9 @@ export function AgentSection() {
               <p className="text-xs text-emerald-800">Seuls les articles disponibles a la demande s&apos;affichent ici.</p>
             </div>
 
-            {articlesLoading ? (
+            {establishments.length > 0 && !selectedEtablissementId ? (
+              <p className="text-sm text-slate-500">Sélectionnez un magasin pour voir les articles.</p>
+            ) : articlesLoading ? (
               <p className="text-sm text-slate-500">Chargement des articles...</p>
             ) : articlesError ? (
               <p className="text-sm text-rose-600">{articlesError}</p>
@@ -303,18 +506,18 @@ export function AgentSection() {
                   const quantity = cart[article.id] ?? 0;
                   const maxAllowed = Math.max(article.quantite, 1);
                   return (
-                    <div key={article.id} className="flex flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
+                    <div
+                      key={article.id}
+                      className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4"
+                    >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-slate-900">{article.nom}</p>
-                        <p className="truncate text-xs text-slate-500">
-                          {article.conditionnement ? article.conditionnement : "Conditionnement non renseigne"}
-                        </p>
-                        <div className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Disponible</span>
+                      <div className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Disponible</span>
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">Commande interne</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                         <button
                           type="button"
                           onClick={() => toggleFavorite(article.id)}
@@ -331,7 +534,8 @@ export function AgentSection() {
                           <button
                             type="button"
                             onClick={() => updateQuantity(article.id, Math.max(0, quantity - 1), maxAllowed)}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-50"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-50"
+                            disabled={establishments.length > 0 && !selectedEtablissementId}
                           >
                             -
                           </button>
@@ -341,12 +545,14 @@ export function AgentSection() {
                             max={maxAllowed}
                             value={quantity}
                             onChange={(event) => updateQuantity(article.id, Number(event.target.value), maxAllowed)}
-                            className="h-7 w-12 rounded-md border border-slate-200 bg-white text-center text-sm font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            className="h-8 w-16 rounded-md border border-slate-200 bg-white text-center text-sm font-semibold text-slate-900 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            disabled={establishments.length > 0 && !selectedEtablissementId}
                           />
                           <button
                             type="button"
                             onClick={() => updateQuantity(article.id, quantity + 1, maxAllowed)}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-50"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-50"
+                            disabled={establishments.length > 0 && !selectedEtablissementId}
                           >
                             +
                           </button>
@@ -375,7 +581,6 @@ export function AgentSection() {
                       >
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{article?.nom ?? "Article"}</p>
-                          <p className="text-xs text-slate-500">{article?.conditionnement ?? "Conditionnement non renseigne"}</p>
                         </div>
                         <span className="text-sm font-semibold text-slate-800">x{quantity}</span>
                       </div>
@@ -384,7 +589,7 @@ export function AgentSection() {
                   <button
                     type="button"
                     onClick={handleSubmit}
-                    disabled={submitting}
+                    disabled={submitting || (establishments.length > 0 && !selectedEtablissementId)}
                     className="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                   >
                     {submitting ? "Envoi..." : "Envoyer la demande au responsable"}
@@ -432,7 +637,7 @@ export function AgentSection() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Mes demandes" subtitle="Statut en direct (prete, modifiee, en attente)" />
+          <CardHeader title="Mes demandes" subtitle="Statut en direct (en attente)" />
           <div className="mt-4 space-y-3">
             {demandesLoading ? (
               <p className="text-sm text-slate-500">Chargement des demandes...</p>
@@ -474,7 +679,17 @@ export function AgentSection() {
                           demande.items.map((item) => {
                             const article = articleIndex.get(item.articleId);
                             const quantity = item.quantitePreparee > 0 ? item.quantitePreparee : item.quantiteDemandee;
-                            return <li key={item.id}>{`${article?.nom ?? "Article"} x${quantity}`}</li>;
+                            const adjusted = item.quantitePreparee > 0 && item.quantitePreparee !== item.quantiteDemandee;
+                            return (
+                              <li key={item.id}>
+                                {`${article?.nom ?? "Article"} x${quantity}`}
+                                {adjusted ? (
+                                  <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                                    Quantite ajustee
+                                  </span>
+                                ) : null}
+                              </li>
+                            );
                           })
                         )}
                       </ul>
@@ -502,7 +717,7 @@ export function AgentSection() {
         </Card>
 
         <Card>
-          <CardHeader title="Historique personnel" subtitle="Faits marquants des 5 dernieres demandes" />
+          <CardHeader title="Historique personnel" subtitle="Demande pretes, modifiees ou refusees (5 dernieres)" />
           <div className="mt-4 space-y-2">
             {demandesLoading ? (
               <p className="text-sm text-slate-500">Chargement de l&apos;historique...</p>
@@ -541,10 +756,25 @@ export function AgentSection() {
                           demande.items.map((item) => {
                             const article = articleIndex.get(item.articleId);
                             const quantity = item.quantitePreparee > 0 ? item.quantitePreparee : item.quantiteDemandee;
-                            return <li key={item.id}>{`${article?.nom ?? "Article"} x${quantity}`}</li>;
+                            const adjusted = item.quantitePreparee > 0 && item.quantitePreparee !== item.quantiteDemandee;
+                            return (
+                              <li key={item.id}>
+                                {`${article?.nom ?? "Article"} x${quantity}`}
+                                {adjusted ? (
+                                  <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                                    Quantite ajustee
+                                  </span>
+                                ) : null}
+                              </li>
+                            );
                           })
                         )}
                       </ul>
+                      {demande.statut === "preparee" || demande.statut === "modifiee" ? (
+                        <p className="text-xs text-slate-600">
+                          Validee par : <span className="font-semibold">{demande.validatedByNom ?? "Responsable inconnu"}</span>
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

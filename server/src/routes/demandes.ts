@@ -6,18 +6,77 @@ import { allowRoles } from "../middleware/role";
 
 export const demandesRouter = Router();
 
-const generateReference = () => {
-  const randomPart = Math.random().toString(36).replace("0.", "").slice(0, 6).toUpperCase().padEnd(6, "X");
-  return `CMD-${randomPart}`;
+const buildAgentInitials = (nom?: string | null) => {
+  const raw = (nom ?? "").trim();
+  if (!raw) return "AG";
+  const parts = raw.split(/[\s-]+/).filter(Boolean);
+  const initials = parts.map((part) => part[0]).join("");
+  const fallback = raw.slice(0, 2);
+  return (initials || fallback || "AG").toUpperCase().slice(0, 3).padEnd(2, "X");
 };
 
-const createUniqueReference = async () => {
+const buildReference = (nom: string | null | undefined, sequence: number) => {
+  const initials = buildAgentInitials(nom);
+  const seq = sequence.toString().padStart(2, "0");
+  return `CMD-${initials}-${seq}`;
+};
+
+const createDemandeWithReference = async (
+  agent: { id: string; nom: string | null; contactEmail: string | null },
+  tenantId: string,
+  items: Array<{ articleId: string; quantite: number }>,
+) => {
+  let lastError: unknown;
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const reference = generateReference();
-    const existing = await prisma.demande.findUnique({ where: { reference } });
-    if (!existing) return reference;
+    try {
+      const demande = await prisma.$transaction(async (tx) => {
+        const updatedAgent = await tx.user.update({
+          where: { id: agent.id },
+          data: { demandeSequence: { increment: 1 } },
+          select: { demandeSequence: true },
+        });
+
+        const reference = buildReference(agent.nom, updatedAgent.demandeSequence);
+
+        return tx.demande.create({
+          data: {
+            etablissementId: tenantId,
+            agentId: agent.id,
+            agentNom: agent.nom,
+            agentEmail: agent.contactEmail,
+            statut: "en_attente",
+            reference,
+            items: {
+              createMany: {
+                data: items.map((item) => ({
+                  articleId: item.articleId,
+                  quantiteDemandee: item.quantite,
+                  quantitePreparee: 0,
+                })),
+              },
+            },
+          },
+          include: { items: true },
+        });
+      });
+
+      return demande;
+    } catch (error) {
+      lastError = error;
+      const isUniqueError =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002" &&
+        Array.isArray(error.meta?.target) &&
+        (error.meta?.target as string[]).includes("reference");
+      if (isUniqueError) {
+        // Retry with the next sequence value
+        continue;
+      }
+      throw error;
+    }
   }
-  throw new Error("Impossible de generer une reference unique pour la demande");
+
+  throw lastError ?? new Error("Impossible de generer une reference unique pour la demande");
 };
 
 demandesRouter.post("/", allowRoles("agent", "responsable", "admin"), async (req, res) => {
@@ -25,13 +84,6 @@ demandesRouter.post("/", allowRoles("agent", "responsable", "admin"), async (req
   const { items } = req.body as { items?: Array<{ articleId: string; quantite: number }> };
   if (!items || items.length === 0) {
     return res.status(400).json({ message: "Une demande doit contenir au moins un article" });
-  }
-
-  let reference: string | undefined;
-  try {
-    reference = await createUniqueReference();
-  } catch (error) {
-    return res.status(500).json({ message: "Generation de reference impossible" });
   }
 
   const agent = await prisma.user.findUnique({
@@ -45,27 +97,16 @@ demandesRouter.post("/", allowRoles("agent", "responsable", "admin"), async (req
     return res.status(403).json({ message: "Utilisateur non rattache a cet etablissement" });
   }
 
-  const demande = await prisma.demande.create({
-    data: {
-      etablissementId: req.tenantId,
-      agentId: agent.id,
-      agentNom: agent?.nom ?? null,
-      agentEmail: agent?.contactEmail ?? null,
-      statut: "en_attente",
-      reference,
-      items: {
-        createMany: {
-          data: items.map((item) => ({
-            articleId: item.articleId,
-            quantiteDemandee: item.quantite,
-            quantitePreparee: 0,
-          })),
-        },
-      },
-    },
-    include: { items: true },
-  });
-  res.status(201).json(demande);
+  try {
+    const demande = await createDemandeWithReference(
+      { id: agent.id, nom: agent.nom ?? null, contactEmail: agent.contactEmail ?? null },
+      req.tenantId,
+      items,
+    );
+    res.status(201).json(demande);
+  } catch (error) {
+    return res.status(500).json({ message: "Generation de reference impossible" });
+  }
 });
 
 demandesRouter.get("/", allowRoles("superadmin", "agent", "responsable", "admin"), async (req, res) => {
@@ -91,6 +132,7 @@ demandesRouter.get("/", allowRoles("superadmin", "agent", "responsable", "admin"
     include: {
       items: true,
       agent: { select: { id: true, nom: true, contactEmail: true } },
+      validatedBy: { select: { id: true, nom: true } },
       etablissement: { select: { id: true, nom: true } },
     },
   });
@@ -103,6 +145,7 @@ demandesRouter.get("/:id", allowRoles("superadmin", "agent", "responsable", "adm
     include: {
       items: true,
       agent: { select: { id: true, nom: true, contactEmail: true } },
+      validatedBy: { select: { id: true, nom: true } },
       etablissement: { select: { id: true, nom: true } },
     },
   });
@@ -117,6 +160,7 @@ demandesRouter.get("/toutes", allowRoles("responsable", "admin"), async (req, re
     include: {
       items: true,
       agent: { select: { id: true, nom: true, contactEmail: true } },
+      validatedBy: { select: { id: true, nom: true } },
       etablissement: { select: { id: true, nom: true } },
     },
   });
@@ -140,10 +184,19 @@ demandesRouter.patch("/:id", allowRoles("responsable", "admin"), async (req, res
       ),
     );
   }
+  const updateData: Prisma.DemandeUpdateInput = { statut: statut ?? demande.statut };
+  if (statut === "preparee" || statut === "modifiee" || statut === "refusee") {
+    updateData.validatedById = req.user?.id ?? null;
+    const validator = req.user?.id
+      ? await prisma.user.findUnique({ where: { id: req.user.id }, select: { nom: true } })
+      : null;
+    updateData.validatedByNom = validator?.nom ?? null;
+  }
+
   const updatedDemande = await prisma.demande.update({
     where: { id: demande.id },
-    data: { statut: statut ?? demande.statut },
-    include: { items: true },
+    data: updateData,
+    include: { items: true, validatedBy: { select: { id: true, nom: true } } },
   });
 
   if (statut === "preparee" || statut === "modifiee") {

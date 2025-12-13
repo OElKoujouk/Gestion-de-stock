@@ -5,16 +5,36 @@ import { prisma } from "../prisma";
 
 export const establishmentsRouter = Router();
 
-establishmentsRouter.use(allowRoles("superadmin", "admin"));
+// Lecture accessible aux agents/responsables pour pouvoir selectionner un magasin,
+// CRUD restreint aux roles admin/superadmin uniquement.
+establishmentsRouter.get("/", allowRoles("superadmin", "admin", "responsable", "agent"), async (req, res) => {
+  const where = req.user?.role === "superadmin" ? undefined : { id: req.tenantId ?? undefined };
 
-establishmentsRouter.get("/", async (_req, res) => {
   const establishments = await prisma.establishment.findMany({
+    where,
     orderBy: { createdAt: "desc" },
+    include: {
+      users: {
+        where: { role: "responsable" },
+        select: { id: true, nom: true, domaine: true },
+      },
+    },
   });
-  res.json(establishments);
+
+  res.json(
+    establishments.map((etab) => ({
+      id: etab.id,
+      nom: etab.nom,
+      adresse: etab.adresse,
+      codePostal: etab.codePostal,
+      ville: etab.ville,
+      createdAt: etab.createdAt,
+      responsables: etab.users,
+    })),
+  );
 });
 
-establishmentsRouter.post("/", async (req, res) => {
+establishmentsRouter.post("/", allowRoles("superadmin", "admin"), async (req, res) => {
   const { nom, adresse, codePostal, ville } = req.body as {
     nom?: string;
     adresse?: string | null;
@@ -35,7 +55,7 @@ establishmentsRouter.post("/", async (req, res) => {
   res.status(201).json(establishment);
 });
 
-establishmentsRouter.put("/:id", async (req, res) => {
+establishmentsRouter.put("/:id", allowRoles("superadmin", "admin"), async (req, res) => {
   const { nom, adresse, codePostal, ville } = req.body as {
     nom?: string;
     adresse?: string | null;
@@ -61,7 +81,7 @@ establishmentsRouter.put("/:id", async (req, res) => {
   }
 });
 
-establishmentsRouter.delete("/:id", async (req, res) => {
+establishmentsRouter.delete("/:id", allowRoles("superadmin", "admin"), async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.$transaction(async (tx) => {

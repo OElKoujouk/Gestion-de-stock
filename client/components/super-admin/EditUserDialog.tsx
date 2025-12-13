@@ -15,6 +15,7 @@ type User = {
   role: string;
   actif: boolean;
   etablissementId: string | null;
+  domaine?: string | null;
   permissions: UserPermissions;
 };
 
@@ -35,6 +36,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
     role: "agent" as RoleSelection,
     actif: true,
     etablissementId: "",
+    domaine: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,9 +51,26 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
         role: user.role as RoleSelection,
         actif: user.actif,
         etablissementId: user.etablissementId ?? "",
+        domaine: user.domaine ?? "",
       });
       setPermissions(user.permissions ?? defaultPermissionsForRole(user.role as RoleSelection));
       setError(null);
+
+      // Si le domaine n'est pas présent dans la liste, on recharge la fiche ciblée pour le préremplir.
+      if (!user.domaine) {
+        api
+          .getUsers()
+          .then((list) => {
+            const fresh = list.find((u) => u.id === user.id);
+            if (fresh) {
+              setForm((prev) => ({
+                ...prev,
+                domaine: fresh.domaine ?? prev.domaine,
+              }));
+            }
+          })
+          .catch(() => null);
+      }
     }
     if (!open) {
       setError(null);
@@ -89,6 +108,7 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
         role: form.role,
         actif: form.actif,
         etablissementId: canSelectTenant ? form.etablissementId || null : undefined,
+        domaine: form.domaine || null,
         permissions,
       });
       onUpdated();
@@ -148,8 +168,18 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
               >
                 <option value="admin">Administrateur etablissement</option>
                 <option value="responsable">Responsable magasin</option>
-                <option value="agent">Agent d&apos;exploitation</option>
+                <option value="agent">Agent d&apos;entretien</option>
               </select>
+            </label>
+            <label className="text-sm font-semibold text-slate-800">
+              Domaine / pôle
+              <input
+                type="text"
+                value={form.domaine}
+                onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
+                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Informatique, Ménage..."
+              />
             </label>
             {canSelectTenant ? (
               <label className="text-sm font-semibold text-slate-800">

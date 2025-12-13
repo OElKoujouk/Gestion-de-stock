@@ -1,10 +1,194 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
 }
 
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+}
+
+model Establishment {
+  id             String          @id @default(cuid())
+  nom            String
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  adresse        String?
+  codePostal     String?         @map("code_postal")
+  ville          String?
+  articles       Article[]
+  categories     Category[]
+  supplierOrders SupplierOrder[]
+  demandes       Demande[]
+  mouvements     Movement[]
+  suppliers      Supplier[]
+  users          User[]
+
+  @@map("etablissements")
+}
+
+model User {
+  id              String         @id @default(cuid())
+  etablissementId String?        @map("etablissement_id")
+  nom             String
+  identifiant     String         @unique
+  motDePasse      String         @map("mot_de_passe")
+  role            Role
+  actif           Boolean        @default(true)
+  domaine         String?
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  contactEmail    String?        @map("contact_email")
+  permissions     Json           @default("{}")
+  demandes        Demande[]      @relation("AgentDemandes")
+  validatedDemandes Demande[]    @relation("ValidatorDemandes")
+  mouvements      Movement[]
+  etablissement   Establishment? @relation(fields: [etablissementId], references: [id])
+  demandeSequence Int            @default(0) @map("demande_sequence")
+  ownedCategories Category[]
+  ownedArticles   Article[]
+
+  @@index([etablissementId], map: "users_etablissement_id_fkey")
+  @@map("users")
+}
+
+model Category {
+  id              String        @id @default(cuid())
+  etablissementId String        @map("etablissement_id")
+  nom             String
+  articles        Article[]
+  etablissement   Establishment @relation(fields: [etablissementId], references: [id])
+  ownerId         String?       @map("owner_id")
+  owner           User?         @relation(fields: [ownerId], references: [id])
+
+  @@index([etablissementId])
+  @@index([ownerId])
+  @@map("categories")
+}
+
+model Article {
+  id                   String              @id @default(cuid())
+  etablissementId      String              @map("etablissement_id")
+  categorieId          String?             @map("categorie_id")
+  ownerId              String?             @map("owner_id")
+  nom                  String
+  quantite             Int
+  referenceFournisseur String?             @map("reference_fournisseur")
+  seuilAlerte          Int                 @map("seuil_alerte")
+  description          String?
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  categorie            Category?           @relation(fields: [categorieId], references: [id])
+  etablissement        Establishment       @relation(fields: [etablissementId], references: [id])
+  owner                User?               @relation(fields: [ownerId], references: [id])
+  supplierOrderItems   SupplierOrderItem[]
+  demandeItems         DemandeItem[]
+  mouvements           Movement[]
+
+  @@index([etablissementId])
+  @@index([categorieId])
+  @@index([ownerId])
+  @@map("articles")
+}
+
+model Movement {
+  id              String        @id @default(cuid())
+  etablissementId String        @map("etablissement_id")
+  articleId       String        @map("article_id")
+  userId          String        @map("user_id")
+  type            MovementType
+  quantite        Int
+  commentaire     String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  article         Article       @relation(fields: [articleId], references: [id])
+  etablissement   Establishment @relation(fields: [etablissementId], references: [id])
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@index([etablissementId])
+  @@index([articleId])
+  @@index([userId])
+  @@map("mouvements")
+}
+
+model Demande {
+  id              String        @id @default(cuid())
+  etablissementId String        @map("etablissement_id")
+  agentId         String?       @map("agent_id")
+  validatedById   String?       @map("valide_par_id")
+  validatedByNom  String?       @map("valide_par_nom")
+  statut          DemandeStatut
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  reference       String?       @unique
+  agentNom        String?       @map("agent_nom")
+  agentEmail      String?       @map("agent_email")
+  items           DemandeItem[]
+  agent           User?         @relation("AgentDemandes", fields: [agentId], references: [id])
+  validatedBy     User?         @relation("ValidatorDemandes", fields: [validatedById], references: [id])
+  etablissement   Establishment @relation(fields: [etablissementId], references: [id])
+
+  @@index([etablissementId])
+  @@index([agentId])
+  @@index([validatedById])
+  @@map("demandes")
+}
+
+model DemandeItem {
+  id               String  @id @default(cuid())
+  demandeId        String  @map("demande_id")
+  articleId        String  @map("article_id")
+  quantiteDemandee Int     @map("quantite_demandee")
+  quantitePreparee Int     @map("quantite_preparee")
+  article          Article @relation(fields: [articleId], references: [id])
+  demande          Demande @relation(fields: [demandeId], references: [id])
+
+  @@index([demandeId])
+  @@index([articleId])
+  @@map("demande_items")
+}
+
+model SupplierOrder {
+  id              String              @id @default(cuid())
+  etablissementId String              @map("etablissement_id")
+  fournisseur     String
+  statut          SupplierOrderStatus
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  supplierId      String?             @map("supplier_id")
+  items           SupplierOrderItem[]
+  etablissement   Establishment       @relation(fields: [etablissementId], references: [id])
+  supplier        Supplier?           @relation(fields: [supplierId], references: [id])
+
+  @@index([etablissementId])
+  @@index([supplierId])
+  @@map("commandes_fournisseurs")
+}
+
+model SupplierOrderItem {
+  id         String        @id @default(cuid())
+  commandeId String        @map("commande_id")
+  articleId  String        @map("article_id")
+  quantite   Int
+  article    Article       @relation(fields: [articleId], references: [id])
+  commande   SupplierOrder @relation(fields: [commandeId], references: [id])
+
+  @@index([commandeId])
+  @@index([articleId])
+  @@map("commande_items")
+}
+
+model Supplier {
+  id              String          @id @default(cuid())
+  etablissementId String          @map("etablissement_id")
+  nom             String
+  adresse         String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  commandes       SupplierOrder[]
+  etablissement   Establishment   @relation(fields: [etablissementId], references: [id])
+
+  @@index([etablissementId])
+  @@map("suppliers")
 }
 
 enum Role {
@@ -29,172 +213,4 @@ enum DemandeStatut {
 enum SupplierOrderStatus {
   en_cours
   recue
-}
-
-model Establishment {
-  id             String          @id @default(cuid())
-  nom            String
-  adresse        String?
-  codePostal     String?         @map("code_postal")
-  ville          String?
-  users          User[]
-  articles       Article[]
-  categories     Category[]
-  mouvements     Movement[]
-  demandes       Demande[]
-  supplierOrders SupplierOrder[]
-  suppliers      Supplier[]
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-
-  @@map("etablissements")
-}
-
-model User {
-  id              String         @id @default(cuid())
-  etablissementId String?        @map("etablissement_id")
-  etablissement   Establishment? @relation(fields: [etablissementId], references: [id])
-  nom             String
-  identifiant     String         @unique
-  contactEmail    String?        @map("contact_email")
-  motDePasse      String         @map("mot_de_passe")
-  role            Role
-  actif           Boolean        @default(true)
-  permissions     Json           @default("{}")
-  mouvements      Movement[]
-  demandes        Demande[]      @relation("AgentDemandes")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
-
-  @@map("users")
-}
-
-model Category {
-  id              String        @id @default(cuid())
-  etablissementId String        @map("etablissement_id")
-  etablissement   Establishment @relation(fields: [etablissementId], references: [id])
-  nom             String
-  articles        Article[]
-
-  @@index([etablissementId])
-  @@map("categories")
-}
-
-model Article {
-  id                   String              @id @default(cuid())
-  etablissementId      String              @map("etablissement_id")
-  etablissement        Establishment       @relation(fields: [etablissementId], references: [id])
-  categorieId          String?             @map("categorie_id")
-  categorie            Category?           @relation(fields: [categorieId], references: [id])
-  nom                  String
-  quantite             Int
-  referenceFournisseur String?             @map("reference_fournisseur")
-  seuilAlerte          Int                 @map("seuil_alerte")
-  description          String?
-  conditionnement      String?
-  mouvements           Movement[]
-  demandeItems         DemandeItem[]
-  supplierOrderItems   SupplierOrderItem[]
-  createdAt            DateTime            @default(now()) @map("created_at")
-  updatedAt            DateTime            @updatedAt @map("updated_at")
-
-  @@index([etablissementId])
-  @@index([categorieId])
-  @@map("articles")
-}
-
-model Movement {
-  id              String        @id @default(cuid())
-  etablissementId String        @map("etablissement_id")
-  etablissement   Establishment @relation(fields: [etablissementId], references: [id])
-  articleId       String        @map("article_id")
-  article         Article       @relation(fields: [articleId], references: [id])
-  userId          String        @map("user_id")
-  user            User          @relation(fields: [userId], references: [id])
-  type            MovementType
-  quantite        Int
-  commentaire     String?
-  createdAt       DateTime      @default(now()) @map("created_at")
-
-  @@index([etablissementId])
-  @@index([articleId])
-  @@index([userId])
-  @@map("mouvements")
-}
-
-model Demande {
-  id              String        @id @default(cuid())
-  etablissementId String        @map("etablissement_id")
-  etablissement   Establishment @relation(fields: [etablissementId], references: [id])
-  agentId         String?       @map("agent_id")
-  agent           User?         @relation("AgentDemandes", fields: [agentId], references: [id])
-  agentNom        String?       @map("agent_nom")
-  agentEmail      String?       @map("agent_email")
-  statut          DemandeStatut
-  reference       String?       @unique
-  items           DemandeItem[]
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-
-  @@index([etablissementId])
-  @@index([agentId])
-  @@map("demandes")
-}
-
-model DemandeItem {
-  id               String  @id @default(cuid())
-  demandeId        String  @map("demande_id")
-  demande          Demande @relation(fields: [demandeId], references: [id])
-  articleId        String  @map("article_id")
-  article          Article @relation(fields: [articleId], references: [id])
-  quantiteDemandee Int     @map("quantite_demandee")
-  quantitePreparee Int     @map("quantite_preparee")
-
-  @@index([demandeId])
-  @@index([articleId])
-  @@map("demande_items")
-}
-
-model SupplierOrder {
-  id              String              @id @default(cuid())
-  etablissementId String              @map("etablissement_id")
-  etablissement   Establishment       @relation(fields: [etablissementId], references: [id])
-  supplierId      String?             @map("supplier_id")
-  supplier        Supplier?           @relation(fields: [supplierId], references: [id])
-  fournisseur     String
-  statut          SupplierOrderStatus
-  items           SupplierOrderItem[]
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
-
-  @@index([etablissementId])
-  @@index([supplierId])
-  @@map("commandes_fournisseurs")
-}
-
-model SupplierOrderItem {
-  id         String        @id @default(cuid())
-  commandeId String        @map("commande_id")
-  commande   SupplierOrder @relation(fields: [commandeId], references: [id])
-  articleId  String        @map("article_id")
-  article    Article       @relation(fields: [articleId], references: [id])
-  quantite   Int
-
-  @@index([commandeId])
-  @@index([articleId])
-  @@map("commande_items")
-}
-
-model Supplier {
-  id              String          @id @default(cuid())
-  etablissementId String          @map("etablissement_id")
-  etablissement   Establishment   @relation(fields: [etablissementId], references: [id])
-  nom             String
-  adresse         String?
-  commandes       SupplierOrder[]
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-
-  @@index([etablissementId])
-  @@map("suppliers")
 }

@@ -22,6 +22,7 @@ usersRouter.get("/", async (req, res) => {
       role: true,
       actif: true,
       etablissementId: true,
+      domaine: true,
       createdAt: true,
       permissions: true,
     },
@@ -30,7 +31,7 @@ usersRouter.get("/", async (req, res) => {
 });
 
 usersRouter.post("/", async (req, res) => {
-  const { nom, identifiant, contactEmail, motDePasse, role, actif, etablissementId, permissions } = req.body as {
+  const { nom, identifiant, contactEmail, motDePasse, role, actif, etablissementId, permissions, domaine } = req.body as {
     nom?: string;
     identifiant?: string;
     contactEmail?: string | null;
@@ -39,6 +40,7 @@ usersRouter.post("/", async (req, res) => {
     actif?: boolean;
     etablissementId?: string | null;
     permissions?: unknown;
+    domaine?: string | null;
   };
   if (!nom || !identifiant || !motDePasse || !role) {
     return res.status(400).json({ message: "Champs requis manquants" });
@@ -60,6 +62,7 @@ usersRouter.post("/", async (req, res) => {
         role: role as any,
         actif: actif ?? true,
         etablissementId: assignedTenant,
+        domaine: domaine ?? null,
         permissions: computedPermissions,
       },
     });
@@ -78,6 +81,7 @@ usersRouter.post("/", async (req, res) => {
       contactEmail: user.contactEmail,
       role: user.role,
       etablissementId: user.etablissementId,
+      domaine: user.domaine,
       permissions: normalizePermissions(user.permissions, user.role),
     });
 });
@@ -88,7 +92,7 @@ usersRouter.put("/:id", async (req, res) => {
   });
   if (!existing) return res.status(404).json({ message: "Utilisateur introuvable" });
 
-  const { nom, identifiant, contactEmail, role, actif, motDePasse, etablissementId, permissions } = req.body as {
+  const { nom, identifiant, contactEmail, role, actif, motDePasse, etablissementId, permissions, domaine } = req.body as {
     nom?: string;
     identifiant?: string;
     contactEmail?: string | null;
@@ -97,6 +101,7 @@ usersRouter.put("/:id", async (req, res) => {
     motDePasse?: string;
     etablissementId?: string | null;
     permissions?: unknown;
+    domaine?: string | null;
   };
 
   if (!nom || !identifiant || !role) {
@@ -108,6 +113,7 @@ usersRouter.put("/:id", async (req, res) => {
     identifiant,
     contactEmail: typeof contactEmail === "undefined" ? existing.contactEmail : contactEmail ?? null,
     role,
+    domaine: typeof domaine === "undefined" ? existing.domaine : domaine ?? null,
   };
 
   if (typeof actif === "boolean") {
@@ -136,13 +142,14 @@ usersRouter.put("/:id", async (req, res) => {
   res.json({
     id: user.id,
     nom: user.nom,
-      identifiant: user.identifiant,
-      contactEmail: user.contactEmail,
-      role: user.role,
-      actif: user.actif,
-      etablissementId: user.etablissementId,
-      permissions: normalizePermissions(user.permissions, user.role),
-    });
+    identifiant: user.identifiant,
+    contactEmail: user.contactEmail,
+    role: user.role,
+    actif: user.actif,
+    etablissementId: user.etablissementId,
+    domaine: user.domaine,
+    permissions: normalizePermissions(user.permissions, user.role),
+  });
 });
 
 usersRouter.patch("/:id/activation", async (req, res) => {
@@ -197,6 +204,25 @@ usersRouter.delete("/:id", async (req, res) => {
     } else {
       await tx.$executeRawUnsafe("UPDATE demandes SET agent_id = NULL WHERE agent_id = ? AND etablissement_id = ?", existing.id, req.tenantId);
     }
+
+    // Détacher les validations effectuées par ce responsable/admin
+    await tx.demande.updateMany({
+      where: { validatedById: existing.id, ...tenantFilter },
+      data: { validatedById: null },
+    });
+
+    // Détacher la propriété des catégories et articles
+    await tx.category.updateMany({
+      where: { ownerId: existing.id, ...tenantFilter },
+      data: { ownerId: null },
+    });
+    await tx.article.updateMany({
+      where: { ownerId: existing.id, ...tenantFilter },
+      data: { ownerId: null },
+    });
+
+    // Supprimer les mouvements historisés liés à cet utilisateur pour éviter les contraintes FK
+    await tx.movement.deleteMany({ where: { userId: existing.id, ...tenantFilter } });
 
     // Supprimer l'utilisateur
     await tx.user.delete({ where: { id: existing.id } });

@@ -31,7 +31,6 @@ const tables = [
       "reference_fournisseur",
       "seuil_alerte",
       "description",
-      "conditionnement",
       "timestamps",
     ],
   },

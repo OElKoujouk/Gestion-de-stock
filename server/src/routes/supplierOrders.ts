@@ -5,9 +5,17 @@ import { allowRoles } from "../middleware/role";
 
 export const supplierOrdersRouter = Router();
 
-supplierOrdersRouter.use(allowRoles("admin", "responsable"));
+supplierOrdersRouter.use(allowRoles("admin", "responsable", "superadmin"));
 
 supplierOrdersRouter.get("/", async (req, res) => {
+  if (req.user?.role === "superadmin") {
+    const etablissementId = req.query.etablissementId ? String(req.query.etablissementId) : undefined;
+    const orders = await prisma.supplierOrder.findMany({
+      where: etablissementId ? { etablissementId } : undefined,
+      include: { items: true, supplier: true },
+    });
+    return res.json(orders);
+  }
   if (!req.tenantId) return res.status(400).json({ message: "Tenant requis" });
   const orders = await prisma.supplierOrder.findMany({
     where: { etablissementId: req.tenantId },
@@ -17,7 +25,10 @@ supplierOrdersRouter.get("/", async (req, res) => {
 });
 
 supplierOrdersRouter.post("/", async (req, res) => {
-  if (!req.tenantId) return res.status(400).json({ message: "Tenant requis" });
+  const isSuperAdmin = req.user?.role === "superadmin";
+  const bodyTenant = (req.body as { etablissementId?: string | null }).etablissementId ?? null;
+  const tenantId = req.tenantId ?? (isSuperAdmin ? bodyTenant : null);
+  if (!tenantId) return res.status(400).json({ message: "Tenant requis" });
   const { fournisseur, supplierId, items } = req.body as {
     fournisseur?: string;
     supplierId?: string | null;
@@ -34,7 +45,7 @@ supplierOrdersRouter.post("/", async (req, res) => {
 
   if (supplierId) {
     const supplier = await prisma.supplier.findFirst({
-      where: { id: supplierId, etablissementId: req.tenantId },
+      where: { id: supplierId, etablissementId: tenantId },
     });
     if (!supplier) return res.status(404).json({ message: "Fournisseur introuvable" });
     supplierName = supplier.nom;
@@ -43,9 +54,18 @@ supplierOrdersRouter.post("/", async (req, res) => {
   if (!supplierName) {
     return res.status(400).json({ message: "Nom du fournisseur requis" });
   }
+
+  const articles = await prisma.article.findMany({
+    where: { id: { in: items.map((i) => i.articleId) }, etablissementId: tenantId },
+    select: { id: true },
+  });
+  if (articles.length !== items.length) {
+    return res.status(400).json({ message: "Articles invalides pour ce magasin" });
+  }
+
   const order = await prisma.supplierOrder.create({
     data: {
-      etablissementId: req.tenantId,
+      etablissementId: tenantId,
       fournisseur: supplierName,
       supplierId: supplierRef,
       statut: "en_cours",
@@ -100,7 +120,7 @@ supplierOrdersRouter.patch("/:id", async (req, res) => {
   }
 
   if (operations.length === 0) {
-    return res.status(400).json({ message: "Aucune modification demandée" });
+    return res.status(400).json({ message: "Aucune modification demandee" });
   }
 
   await prisma.$transaction(operations);
@@ -122,4 +142,31 @@ supplierOrdersRouter.patch("/:id", async (req, res) => {
   }
 
   res.json(fresh);
+});
+
+supplierOrdersRouter.delete("/:id", async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "Authentification requise" });
+  }
+
+  const isSuperAdmin = req.user.role === "superadmin";
+
+  const order = await prisma.supplierOrder.findFirst({
+    where: { id: req.params.id, ...(isSuperAdmin ? {} : { etablissementId: req.tenantId }) },
+  });
+
+  if (!order) {
+    return res.status(404).json({ message: "Commande introuvable" });
+  }
+
+  if (!isSuperAdmin && (!req.tenantId || order.etablissementId !== req.tenantId)) {
+    return res.status(403).json({ message: "Acces refuse pour ce tenant" });
+  }
+
+  await prisma.$transaction([
+    prisma.supplierOrderItem.deleteMany({ where: { commandeId: order.id } }),
+    prisma.supplierOrder.delete({ where: { id: order.id } }),
+  ]);
+
+  res.status(204).send();
 });
