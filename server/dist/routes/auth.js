@@ -44,6 +44,7 @@ exports.authRouter.post("/login", async (req, res) => {
             etablissement_id: user.etablissementId,
             nom: user.nom,
             email: user.identifiant,
+            domaine: user.domaine,
             permissions,
         },
     });
@@ -64,6 +65,7 @@ exports.authRouter.get("/me", auth_1.authMiddleware, async (req, res) => {
             contactEmail: true,
             role: true,
             etablissementId: true,
+            domaine: true,
             permissions: true,
         },
     });
@@ -77,6 +79,7 @@ exports.authRouter.get("/me", auth_1.authMiddleware, async (req, res) => {
         contactEmail: user.contactEmail,
         role: user.role,
         etablissementId: user.etablissementId,
+        domaine: user.domaine,
         permissions: (0, permissions_1.normalizePermissions)(user.permissions, user.role),
     });
 });

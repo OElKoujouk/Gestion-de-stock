@@ -84,12 +84,16 @@ supplierOrdersRouter.post("/", async (req, res) => {
 });
 
 supplierOrdersRouter.patch("/:id", async (req, res) => {
+  const isSuperAdmin = req.user?.role === "superadmin";
+  if (!isSuperAdmin && !req.tenantId) {
+    return res.status(400).json({ message: "Tenant requis" });
+  }
   const { items, statut } = req.body as {
     items?: Array<{ articleId: string; quantite: number }>;
     statut?: "en_cours" | "recue";
   };
   const order = await prisma.supplierOrder.findFirst({
-    where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
+    where: isSuperAdmin ? { id: req.params.id } : { id: req.params.id, etablissementId: req.tenantId as string },
     include: { items: true, supplier: true },
   });
   if (!order) return res.status(404).json({ message: "Commande introuvable" });
@@ -150,9 +154,12 @@ supplierOrdersRouter.delete("/:id", async (req, res) => {
   }
 
   const isSuperAdmin = req.user.role === "superadmin";
+  if (!isSuperAdmin && !req.tenantId) {
+    return res.status(400).json({ message: "Tenant requis" });
+  }
 
   const order = await prisma.supplierOrder.findFirst({
-    where: { id: req.params.id, ...(isSuperAdmin ? {} : { etablissementId: req.tenantId }) },
+    where: isSuperAdmin ? { id: req.params.id } : { id: req.params.id, etablissementId: req.tenantId as string },
   });
 
   if (!order) {

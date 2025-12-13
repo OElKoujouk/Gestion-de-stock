@@ -10,9 +10,12 @@ client/.env.local
 # Server
 server/node_modules/
 server/.env
+server/.env.dev
+server/.env.local
 
 # Root env files
 .env
+.env.local
 .env.dev
 .env.prod
 .env.staging

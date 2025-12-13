@@ -105,7 +105,6 @@ export function StoreManagerSection() {
     () => articles.filter((article) => article.quantite <= article.seuilAlerte),
     [articles],
   );
-  const sortedArticles = useMemo(() => [...articles].sort((a, b) => a.nom.localeCompare(b.nom)), [articles]);
 
   const fetchDemandes = useCallback(() => {
     setDemandesLoading(true);
@@ -156,13 +155,6 @@ export function StoreManagerSection() {
   }, [toast]);
 
   const activeDemandes = useMemo(() => demandes.filter((demande) => demande.statut === "en_attente"), [demandes]);
-  const processedDemandes = useMemo(
-    () =>
-      demandes.filter(
-        (demande) => demande.statut === "preparee" || demande.statut === "modifiee" || demande.statut === "refusee",
-      ),
-    [demandes],
-  );
 
   const demandesSorted = useMemo(
     () =>
@@ -214,24 +206,9 @@ export function StoreManagerSection() {
     }
   };
 
-  const formatItems = (items: DemandeItem[]) =>
-    items
-      .map((item) => {
-        const article = articleIndex.get(item.articleId);
-        const qty = quantityEdits[item.id] ?? item.quantitePreparee ?? item.quantiteDemandee;
-        return `${article?.nom ?? "Article"} x${qty}`;
-      })
-      .join(", ");
-
   const demandeCode = (demande: Demande) => demande.reference ?? `CMD-${demande.id.slice(-6).toUpperCase()}`;
 
   const formatDemandeRef = (demande: Demande) => demandeCode(demande);
-
-  const demandeLabel = (demande: Demande) => {
-    const firstArticle = demande.items[0] ? articleIndex.get(demande.items[0].articleId)?.nom ?? "Demande" : "Demande";
-    const date = demande.createdAt ? dateFormatter.format(new Date(demande.createdAt)) : "";
-    return `${firstArticle} · ${demande.items.length} ligne${demande.items.length > 1 ? "s" : ""}${date ? ` · ${date}` : ""}`;
-  };
 
   const toggleDemandeDetails = (id: string) => {
     setExpandedDemandes((prev) => ({ ...prev, [id]: !prev[id] }));

@@ -25,6 +25,7 @@ exports.usersRouter.get("/", async (req, res) => {
             role: true,
             actif: true,
             etablissementId: true,
+            domaine: true,
             createdAt: true,
             permissions: true,
         },
@@ -32,7 +33,7 @@ exports.usersRouter.get("/", async (req, res) => {
     res.json(users.map((user) => ({ ...user, permissions: (0, permissions_1.normalizePermissions)(user.permissions, user.role) })));
 });
 exports.usersRouter.post("/", async (req, res) => {
-    const { nom, identifiant, contactEmail, motDePasse, role, actif, etablissementId, permissions } = req.body;
+    const { nom, identifiant, contactEmail, motDePasse, role, actif, etablissementId, permissions, domaine } = req.body;
     if (!nom || !identifiant || !motDePasse || !role) {
         return res.status(400).json({ message: "Champs requis manquants" });
     }
@@ -53,6 +54,7 @@ exports.usersRouter.post("/", async (req, res) => {
                 role: role,
                 actif: actif ?? true,
                 etablissementId: assignedTenant,
+                domaine: domaine ?? null,
                 permissions: computedPermissions,
             },
         });
@@ -72,6 +74,7 @@ exports.usersRouter.post("/", async (req, res) => {
         contactEmail: user.contactEmail,
         role: user.role,
         etablissementId: user.etablissementId,
+        domaine: user.domaine,
         permissions: (0, permissions_1.normalizePermissions)(user.permissions, user.role),
     });
 });
@@ -81,7 +84,7 @@ exports.usersRouter.put("/:id", async (req, res) => {
     });
     if (!existing)
         return res.status(404).json({ message: "Utilisateur introuvable" });
-    const { nom, identifiant, contactEmail, role, actif, motDePasse, etablissementId, permissions } = req.body;
+    const { nom, identifiant, contactEmail, role, actif, motDePasse, etablissementId, permissions, domaine } = req.body;
     if (!nom || !identifiant || !role) {
         return res.status(400).json({ message: "Nom, identifiant et rôle sont obligatoires" });
     }
@@ -90,6 +93,7 @@ exports.usersRouter.put("/:id", async (req, res) => {
         identifiant,
         contactEmail: typeof contactEmail === "undefined" ? existing.contactEmail : contactEmail ?? null,
         role,
+        domaine: typeof domaine === "undefined" ? existing.domaine : domaine ?? null,
     };
     if (typeof actif === "boolean") {
         data.actif = actif;
@@ -117,6 +121,7 @@ exports.usersRouter.put("/:id", async (req, res) => {
         role: user.role,
         actif: user.actif,
         etablissementId: user.etablissementId,
+        domaine: user.domaine,
         permissions: (0, permissions_1.normalizePermissions)(user.permissions, user.role),
     });
 });
@@ -165,6 +170,22 @@ exports.usersRouter.delete("/:id", async (req, res) => {
         else {
             await tx.$executeRawUnsafe("UPDATE demandes SET agent_id = NULL WHERE agent_id = ? AND etablissement_id = ?", existing.id, req.tenantId);
         }
+        // Détacher les validations effectuées par ce responsable/admin
+        await tx.demande.updateMany({
+            where: { validatedById: existing.id, ...tenantFilter },
+            data: { validatedById: null },
+        });
+        // Détacher la propriété des catégories et articles
+        await tx.category.updateMany({
+            where: { ownerId: existing.id, ...tenantFilter },
+            data: { ownerId: null },
+        });
+        await tx.article.updateMany({
+            where: { ownerId: existing.id, ...tenantFilter },
+            data: { ownerId: null },
+        });
+        // Supprimer les mouvements historisés liés à cet utilisateur pour éviter les contraintes FK
+        await tx.movement.deleteMany({ where: { userId: existing.id, ...tenantFilter } });
         // Supprimer l'utilisateur
         await tx.user.delete({ where: { id: existing.id } });
     });

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "../prisma";
 import { allowRoles } from "../middleware/role";
@@ -186,11 +186,14 @@ demandesRouter.patch("/:id", allowRoles("responsable", "admin"), async (req, res
   }
   const updateData: Prisma.DemandeUpdateInput = { statut: statut ?? demande.statut };
   if (statut === "preparee" || statut === "modifiee" || statut === "refusee") {
-    updateData.validatedById = req.user?.id ?? null;
-    const validator = req.user?.id
-      ? await prisma.user.findUnique({ where: { id: req.user.id }, select: { nom: true } })
-      : null;
-    updateData.validatedByNom = validator?.nom ?? null;
+    if (req.user?.id) {
+      updateData.validatedBy = { connect: { id: req.user.id } };
+      const validator = await prisma.user.findUnique({ where: { id: req.user.id }, select: { nom: true } });
+      updateData.validatedByNom = validator?.nom ?? null;
+    } else {
+      updateData.validatedBy = { disconnect: true };
+      updateData.validatedByNom = null;
+    }
   }
 
   const updatedDemande = await prisma.demande.update({

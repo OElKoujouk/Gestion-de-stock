@@ -5,14 +5,31 @@ const express_1 = require("express");
 const role_1 = require("../middleware/role");
 const prisma_1 = require("../prisma");
 exports.establishmentsRouter = (0, express_1.Router)();
-exports.establishmentsRouter.use((0, role_1.allowRoles)("superadmin", "admin"));
-exports.establishmentsRouter.get("/", async (_req, res) => {
+// Lecture accessible aux agents/responsables pour pouvoir selectionner un magasin,
+// CRUD restreint aux roles admin/superadmin uniquement.
+exports.establishmentsRouter.get("/", (0, role_1.allowRoles)("superadmin", "admin", "responsable", "agent"), async (req, res) => {
+    const where = req.user?.role === "superadmin" ? undefined : { id: req.tenantId ?? undefined };
     const establishments = await prisma_1.prisma.establishment.findMany({
+        where,
         orderBy: { createdAt: "desc" },
+        include: {
+            users: {
+                where: { role: "responsable" },
+                select: { id: true, nom: true, domaine: true },
+            },
+        },
     });
-    res.json(establishments);
+    res.json(establishments.map((etab) => ({
+        id: etab.id,
+        nom: etab.nom,
+        adresse: etab.adresse,
+        codePostal: etab.codePostal,
+        ville: etab.ville,
+        createdAt: etab.createdAt,
+        responsables: etab.users,
+    })));
 });
-exports.establishmentsRouter.post("/", async (req, res) => {
+exports.establishmentsRouter.post("/", (0, role_1.allowRoles)("superadmin", "admin"), async (req, res) => {
     const { nom, adresse, codePostal, ville } = req.body;
     if (!nom) {
         return res.status(400).json({ message: "Nom requis" });
@@ -27,7 +44,7 @@ exports.establishmentsRouter.post("/", async (req, res) => {
     });
     res.status(201).json(establishment);
 });
-exports.establishmentsRouter.put("/:id", async (req, res) => {
+exports.establishmentsRouter.put("/:id", (0, role_1.allowRoles)("superadmin", "admin"), async (req, res) => {
     const { nom, adresse, codePostal, ville } = req.body;
     if (!nom) {
         return res.status(400).json({ message: "Nom requis" });
@@ -48,7 +65,7 @@ exports.establishmentsRouter.put("/:id", async (req, res) => {
         res.status(404).json({ message: "Etablissement introuvable" });
     }
 });
-exports.establishmentsRouter.delete("/:id", async (req, res) => {
+exports.establishmentsRouter.delete("/:id", (0, role_1.allowRoles)("superadmin", "admin"), async (req, res) => {
     const { id } = req.params;
     try {
         await prisma_1.prisma.$transaction(async (tx) => {

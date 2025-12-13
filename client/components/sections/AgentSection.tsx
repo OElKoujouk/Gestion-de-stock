@@ -82,8 +82,6 @@ export function AgentSection() {
   const [demandesError, setDemandesError] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [expandedDemandeIds, setExpandedDemandeIds] = useState<Set<string>>(new Set());
-  const [showAllInProgress, setShowAllInProgress] = useState(false);
-  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const [favorites, setFavorites] = useState<string[]>([]);
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -178,24 +176,24 @@ export function AgentSection() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, role]);
+  }, [isAuthenticated, role, selectedEtablissementId]);
   useEffect(() => {
     if (!isAuthenticated || role !== "agent") {
       return;
     }
     setArticlesLoading(true);
     setCategoriesLoading(true);
-    const articleParams =
+    const articleParams: { etablissementId?: string; ownerId?: string } | undefined =
       selectedEtablissementId || selectedResponsableId
         ? { etablissementId: selectedEtablissementId || undefined, ownerId: selectedResponsableId || undefined }
         : undefined;
-    const categoryParams =
+    const categoryParams: { etablissementId?: string; ownerId?: string } | undefined =
       selectedEtablissementId || selectedResponsableId
         ? { etablissementId: selectedEtablissementId || undefined, ownerId: selectedResponsableId || undefined }
         : undefined;
     Promise.all([
-      api.getArticles(articleParams as any),
-      api.getCategories(categoryParams as any),
+      api.getArticles(articleParams),
+      api.getCategories(categoryParams),
     ])
       .then(([articlesData, categoriesData]) => {
         setArticles(
@@ -203,7 +201,7 @@ export function AgentSection() {
             id: article.id,
             nom: article.nom,
             quantite: article.quantite,
-            categorieId: (article as any).categorieId ?? null,
+            categorieId: article.categorieId ?? null,
           })),
         );
         setArticlesError(null);
@@ -224,12 +222,12 @@ export function AgentSection() {
   const fetchDemandes = () => {
     if (!isAuthenticated || role !== "agent") return;
     setDemandesLoading(true);
-    const params =
+    const params: { etablissementId?: string; ownerId?: string } | undefined =
       selectedEtablissementId || selectedResponsableId
         ? { etablissementId: selectedEtablissementId || undefined, ownerId: selectedResponsableId || undefined }
         : undefined;
     api
-      .getDemandes(params as any)
+      .getDemandes(params)
       .then((data) => {
         setDemandes(data);
         setDemandesError(null);
@@ -246,7 +244,7 @@ export function AgentSection() {
   const availableArticles = useMemo(
     () =>
       articles.filter((article) => {
-        const matchesCategory = !categoryFilter || (article as any).categorieId === categoryFilter;
+        const matchesCategory = !categoryFilter || article.categorieId === categoryFilter || (categoryFilter === "none" && !article.categorieId);
         return matchesCategory && article.quantite > 0;
       }),
     [articles, categoryFilter],
@@ -304,14 +302,6 @@ export function AgentSection() {
         .filter((demande) => demande.statut === "preparee" || demande.statut === "modifiee" || demande.statut === "refusee")
         .slice(0, 5),
     [demandesSorted],
-  );
-  const visibleInProgress = useMemo(
-    () => (showAllInProgress ? inProgressDemandes : inProgressDemandes.slice(0, 3)),
-    [inProgressDemandes, showAllInProgress],
-  );
-  const visibleHistory = useMemo(
-    () => (showAllHistory ? historyDemandes : historyDemandes.slice(0, 3)),
-    [historyDemandes, showAllHistory],
   );
 
   const demandeCode = (demande: Demande) => demande.reference ?? `CMD-${demande.id.slice(-6).toUpperCase()}`;
