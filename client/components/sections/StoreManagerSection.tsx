@@ -23,6 +23,8 @@ type Demande = {
   etablissement?: { id: string; nom: string };
   agent?: { id: string; nom: string; contactEmail?: string | null };
   agentNom?: string | null;
+  validatedById?: string | null;
+  validatedByNom?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -32,7 +34,7 @@ type ArticleWithStock = { id: string; nom: string; quantite: number; seuilAlerte
 const statusLabel: Record<DemandeStatus, string> = {
   en_attente: "En attente",
   preparee: "Prete",
-  modifiee: "Modifiee",
+  modifiee: "Prete (modifiee)",
   refusee: "Refusee",
 };
 
@@ -153,7 +155,14 @@ export function StoreManagerSection() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const activeDemandes = useMemo(() => demandes.filter((demande) => demande.statut === "en_attente" || demande.statut === "modifiee"), [demandes]);
+  const activeDemandes = useMemo(() => demandes.filter((demande) => demande.statut === "en_attente"), [demandes]);
+  const processedDemandes = useMemo(
+    () =>
+      demandes.filter(
+        (demande) => demande.statut === "preparee" || demande.statut === "modifiee" || demande.statut === "refusee",
+      ),
+    [demandes],
+  );
 
   const demandesSorted = useMemo(
     () =>
@@ -165,6 +174,7 @@ export function StoreManagerSection() {
     [activeDemandes],
   );
   const visibleDemandes = useMemo(() => (showAllDemandes ? demandesSorted : demandesSorted.slice(0, 3)), [demandesSorted, showAllDemandes]);
+
 
   const handleQuantityChange = (itemId: string, value: number) => {
     if (Number.isNaN(value) || value < 0) return;
@@ -181,7 +191,7 @@ export function StoreManagerSection() {
       }));
       const updated = await api.updateDemande(demande.id, { statut, items: itemsPayload });
       setDemandes((prev) => prev.map((d) => (d.id === demande.id ? (updated as Demande) : d)));
-      const statusLabelText = statut === "preparee" ? "validee" : "modifiee";
+      const statusLabelText = statut === "preparee" ? "validee" : "validee (modifiee)";
       setToast({ message: `Commande ${formatDemandeRef(demande)} ${statusLabelText}`, type: "success" });
     } catch (err) {
       setDemandesError(err instanceof Error ? err.message : "Impossible de mettre à jour la demande.");
@@ -226,6 +236,7 @@ export function StoreManagerSection() {
   const toggleDemandeDetails = (id: string) => {
     setExpandedDemandes((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+
 
   return (
     <div className="space-y-6">
@@ -357,12 +368,12 @@ export function StoreManagerSection() {
                       </ul>
 
                       {isEditable ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-start">
                           <button
                             type="button"
                             onClick={() => handlePrepare(demande, "preparee")}
                             disabled={savingId === demande.id}
-                            className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                            className="w-full rounded-full bg-emerald-600 px-3 py-1.5 text-center text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
                           >
                             {savingId === demande.id ? "Validation..." : "Valider"}
                           </button>
@@ -370,15 +381,15 @@ export function StoreManagerSection() {
                             type="button"
                             onClick={() => handlePrepare(demande, "modifiee")}
                             disabled={savingId === demande.id}
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            className="w-full rounded-full border border-slate-200 bg-white px-3 py-1.5 text-center text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
                           >
-                            {savingId === demande.id ? "Sauvegarde..." : "Enregistrer comme modifiee"}
+                            {savingId === demande.id ? "Validation..." : "Valider en modifiant"}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleRefuse(demande.id)}
                             disabled={savingId === demande.id}
-                            className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                            className="w-full rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-center text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 sm:w-auto"
                           >
                             {savingId === demande.id ? "Refus..." : "Refuser"}
                           </button>
@@ -407,6 +418,7 @@ export function StoreManagerSection() {
           )}
         </div>
       </Card>
+
       {toast ? (
         <div
           className={cn(

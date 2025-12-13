@@ -26,6 +26,9 @@ type Demande = {
   agent?: { id: string; nom: string; contactEmail?: string | null };
   agentNom?: string | null;
   agentEmail?: string | null;
+  validatedById?: string | null;
+  validatedByNom?: string | null;
+  validatedBy?: { id?: string | null; nom?: string | null } | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -313,20 +316,26 @@ export function MovementsSection() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <span
-                        className={cn(
-                          "rounded-full px-3 py-1 text-xs font-semibold",
-                          STATUS_BADGE[status],
+                      <div className="flex items-center gap-4">
+                        <span
+                          className={cn(
+                            "rounded-full px-3 py-1 text-xs font-semibold",
+                            STATUS_BADGE[status],
+                          )}
+                        >
+                          {STATUS_LABELS[status]}
+                        </span>
+                        {(d.statut === "preparee" || d.statut === "modifiee" || d.statut === "refusee") && (
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                            {d.statut === "refusee" ? "Refusée par " : "Validée par "}
+                            {d.validatedByNom ?? d.validatedBy?.nom ?? "Responsable inconnu"}
+                          </span>
                         )}
-                      >
-                        {STATUS_LABELS[status]}
-                      </span>
 
-                      <span className="text-xs text-slate-500">
-                        {dateFormatter.format(
-                          new Date(d.updatedAt ?? d.createdAt ?? 0),
-                        )}
+                        <span className="text-xs text-slate-500">
+                          {dateFormatter.format(
+                            new Date(d.updatedAt ?? d.createdAt ?? 0),
+                          )}
                       </span>
 
                       <span
@@ -346,17 +355,17 @@ export function MovementsSection() {
                       <div className="mb-2 inline-flex items-center rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
                         {formatDemandeRef(d)}
                       </div>
-                      <ul className="space-y-2 text-sm">
-                        {d.items.map((item) => {
-                          const article = articleIndex.get(item.articleId);
-                          const qty =
-                            item.quantitePreparee || item.quantiteDemandee;
+                        <ul className="space-y-2 text-sm">
+                          {d.items.map((item) => {
+                            const article = articleIndex.get(item.articleId);
+                            const qty =
+                              item.quantitePreparee || item.quantiteDemandee;
 
-                          return (
-                            <li
-                              key={item.id}
-                              className="flex items-center gap-2"
-                            >
+                            return (
+                              <li
+                                key={item.id}
+                                className="flex items-center gap-2"
+                              >
                               <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                               <span className="font-medium text-slate-900">
                                 {article?.nom ?? "Article"}

@@ -24,6 +24,7 @@ export function UsersSection() {
       role: string;
       actif: boolean;
       etablissementId: string | null;
+      domaine?: string | null;
       permissions: UserPermissions;
     }>
   >([]);
@@ -41,6 +42,8 @@ export function UsersSection() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedTenantId, setSelectedTenantId] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
 
   const tenantFilter = isSuperAdmin ? selectedTenantId : undefined;
   const columnCount = canManageUsers ? 5 : 4;
@@ -49,7 +52,7 @@ export function UsersSection() {
     setLoading(true);
     try {
       const data = await api.getUsers();
-      setUsers(data);
+      setUsers(data.map((u) => ({ ...u, domaine: u.domaine ?? "" })));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger les utilisateurs");
@@ -87,16 +90,21 @@ export function UsersSection() {
     return users
       .filter((u) => u.id !== currentUserId)
       .filter((u) => (tenantFilter ? u.etablissementId === tenantFilter : true))
+      .filter((u) => (roleFilter ? u.role === roleFilter : true))
+      .filter((u) =>
+        statusFilter === "active" ? u.actif : statusFilter === "inactive" ? !u.actif : true,
+      )
       .filter((u) => {
         if (!q) return true;
         return (
           u.nom.toLowerCase().includes(q) ||
           u.identifiant.toLowerCase().includes(q) ||
           (u.contactEmail ?? "").toLowerCase().includes(q) ||
-          u.role.toLowerCase().includes(q)
+          u.role.toLowerCase().includes(q) ||
+          (u.domaine ?? "").toLowerCase().includes(q)
         );
       });
-  }, [users, currentUserId, search, tenantFilter]);
+  }, [users, currentUserId, search, tenantFilter, roleFilter, statusFilter]);
 
   const handleDelete = async (user: (typeof users)[number]) => {
     if (!window.confirm(`Supprimer l'utilisateur ${user.nom} ?`)) return;
@@ -148,6 +156,28 @@ export function UsersSection() {
             </select>
           )}
 
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="w-full rounded-full border border-slate-200 px-3 py-2 text-sm sm:w-auto"
+          >
+            <option value="">Tous les rÓles</option>
+            <option value="superadmin">Superadmin</option>
+            <option value="admin">Admin</option>
+            <option value="responsable">Responsable</option>
+            <option value="agent">Agent</option>
+          </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "" | "active" | "inactive")}
+            className="w-full rounded-full border border-slate-200 px-3 py-2 text-sm sm:w-auto"
+          >
+            <option value="">Tous les états</option>
+            <option value="active">Actifs</option>
+            <option value="inactive">Désactivés</option>
+          </select>
+
           <input
             type="search"
             value={search}
@@ -189,6 +219,7 @@ export function UsersSection() {
                   <Badge variant="neutral">
                     {user.etablissementId ? establishmentNames[user.etablissementId] ?? "—" : "Global"}
                   </Badge>
+                  {user.domaine ? <Badge variant="neutral">{user.domaine}</Badge> : null}
                   <Badge variant={user.actif ? "success" : "warning"}>
                     {user.actif ? "Actif" : "Désactivé"}
                   </Badge>
@@ -229,6 +260,7 @@ export function UsersSection() {
                   <th className="whitespace-nowrap pb-3 pr-6">Utilisateur</th>
                   <th className="pb-3 pr-6">Rôle</th>
                   <th className="pb-3 pr-6">Établissement</th>
+                  <th className="pb-3 pr-6">Domaine</th>
                   <th className="pb-3 pr-6">État</th>
                   {canManageUsers && <th className="pb-3 text-right">Actions</th>}
                 </tr>
@@ -273,6 +305,8 @@ export function UsersSection() {
                       <td className="py-4 pr-6 text-slate-600">
                         {user.etablissementId ? establishmentNames[user.etablissementId] ?? "—" : "Global"}
                       </td>
+
+                      <td className="py-4 pr-6 text-slate-700">{user.domaine ?? "—"}</td>
 
                       <td className="py-4 pr-6">
                         <Badge variant={user.actif ? "success" : "warning"}>

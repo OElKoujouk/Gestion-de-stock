@@ -42,20 +42,36 @@ export const api = {
   login: (payload: { email: string; password: string }) =>
     request<{
       token: string;
-      user: { id: string; role: string; etablissement_id: string | null; nom: string; permissions: UserPermissions };
+      user: {
+        id: string;
+        role: string;
+        etablissement_id: string | null;
+        nom: string;
+        domaine?: string | null;
+        permissions: UserPermissions;
+      };
     }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   me: () =>
-    request<{ id: string; nom: string; email: string; role: string; etablissementId: string | null; permissions: UserPermissions }>(
-      "/auth/me",
-    ),
+    request<{
+      id: string;
+      nom: string;
+      email: string;
+      role: string;
+      etablissementId: string | null;
+      domaine?: string | null;
+      permissions: UserPermissions;
+    }>("/auth/me"),
   stats: () => request("/articles"),
-  getArticles: (params?: { etablissementId?: string }) => {
+  getArticles: (params?: { etablissementId?: string; ownerId?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.etablissementId) {
       searchParams.set("etablissementId", params.etablissementId);
+    }
+    if (params?.ownerId) {
+      searchParams.set("ownerId", params.ownerId);
     }
     const query = searchParams.toString();
     return request<
@@ -77,7 +93,6 @@ export const api = {
     referenceFournisseur: string;
     seuilAlerte: number;
     description?: string | null;
-    conditionnement?: string | null;
     etablissementId?: string;
   }) =>
     request<{ id: string; nom: string; quantite: number; referenceFournisseur: string; seuilAlerte: number }>("/articles", {
@@ -102,7 +117,6 @@ export const api = {
       referenceFournisseur: string | null;
       seuilAlerte: number;
       description?: string | null;
-      conditionnement?: string | null;
     }>,
   ) =>
     request<{
@@ -117,10 +131,13 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  getCategories: (params?: { etablissementId?: string }) => {
+  getCategories: (params?: { etablissementId?: string; ownerId?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.etablissementId) {
       searchParams.set("etablissementId", params.etablissementId);
+    }
+    if (params?.ownerId) {
+      searchParams.set("ownerId", params.ownerId);
     }
     const query = searchParams.toString();
     return request<Array<{ id: string; nom: string }>>(`/categories${query ? `?${query}` : ""}`);
@@ -139,10 +156,13 @@ export const api = {
     request<void>(`/categories/${id}`, {
       method: "DELETE",
     }),
-  getDemandes: (params?: { etablissementId?: string }) => {
+  getDemandes: (params?: { etablissementId?: string; ownerId?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.etablissementId) {
       searchParams.set("etablissementId", params.etablissementId);
+    }
+    if (params?.ownerId) {
+      searchParams.set("ownerId", params.ownerId);
     }
     const query = searchParams.toString();
     return request<
@@ -151,6 +171,9 @@ export const api = {
         statut: "en_attente" | "preparee" | "modifiee" | "refusee";
         items: Array<{ id: string; articleId: string; quantiteDemandee: number; quantitePreparee: number }>;
         agent?: { id: string; nom: string; contactEmail?: string | null };
+        validatedById?: string | null;
+        validatedByNom?: string | null;
+        validatedBy?: { id: string; nom: string } | null;
         createdAt?: string;
         updatedAt?: string;
       }>
@@ -181,9 +204,17 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getEstablishments: () =>
-    request<Array<{ id: string; nom: string; createdAt: string; adresse: string | null; codePostal: string | null; ville: string | null }>>(
-      "/etablissements",
-    ),
+    request<
+      Array<{
+        id: string;
+        nom: string;
+        createdAt: string;
+        adresse: string | null;
+        codePostal: string | null;
+        ville: string | null;
+        responsables?: Array<{ id: string; nom: string; domaine?: string | null }>;
+      }>
+    >("/etablissements"),
   createEstablishment: (payload: { nom: string; adresse?: string | null; codePostal?: string | null; ville?: string | null }) =>
     request<{ id: string; nom: string; createdAt: string; adresse: string | null; codePostal: string | null; ville: string | null }>(
       "/etablissements",
@@ -214,6 +245,7 @@ export const api = {
         role: string;
         etablissementId: string | null;
         actif: boolean;
+        domaine?: string | null;
         permissions: UserPermissions;
       }>
     >("/users"),
@@ -224,6 +256,7 @@ export const api = {
     motDePasse: string;
     role: string;
     etablissementId?: string | null;
+    domaine?: string | null;
     permissions?: UserPermissions;
   }) =>
     request<{
@@ -233,6 +266,7 @@ export const api = {
       contactEmail?: string | null;
       role: string;
       etablissementId: string | null;
+      domaine?: string | null;
       permissions: UserPermissions;
     }>("/users", {
       method: "POST",
@@ -247,6 +281,7 @@ export const api = {
       role: string;
       actif: boolean;
       etablissementId?: string | null;
+      domaine?: string | null;
       permissions?: UserPermissions;
     },
   ) =>
@@ -258,12 +293,13 @@ export const api = {
       role: string;
       etablissementId: string | null;
       actif: boolean;
+      domaine?: string | null;
       permissions: UserPermissions;
     }>(`/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  createSupplierOrder: (payload: { fournisseur: string; items: Array<{ articleId: string; quantite: number }> }) =>
+  createSupplierOrder: (payload: { fournisseur: string; items: Array<{ articleId: string; quantite: number }>; etablissementId?: string }) =>
     request<{
       id: string;
       fournisseur: string;
@@ -276,19 +312,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  getSupplierOrders: () =>
-    request<
+  getSupplierOrders: (params?: { etablissementId?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.etablissementId) {
+      searchParams.set("etablissementId", params.etablissementId);
+    }
+    const query = searchParams.toString();
+    return request<
       Array<{
         id: string;
-      fournisseur: string;
-      statut: "en_cours" | "recue";
-      createdAt?: string;
-      updatedAt?: string;
-      supplierId?: string | null;
-      supplier?: { id: string; nom: string; adresse: string | null };
-      items: Array<{ id: string; articleId: string; quantite: number }>;
-    }>
-    >("/fournisseurs/commandes"),
+        fournisseur: string;
+        statut: "en_cours" | "recue";
+        createdAt?: string;
+        updatedAt?: string;
+        supplierId?: string | null;
+        supplier?: { id: string; nom: string; adresse: string | null };
+        items: Array<{ id: string; articleId: string; quantite: number }>;
+      }>
+    >(`/fournisseurs/commandes${query ? `?${query}` : ""}`);
+  },
   updateSupplierOrder: (id: string, payload: { statut?: "en_cours" | "recue"; items?: Array<{ articleId: string; quantite: number }> }) =>
     request<{
       id: string;
@@ -301,11 +343,23 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  getSuppliers: () =>
-    request<Array<{ id: string; nom: string; adresse: string | null }>>("/fournisseurs"),
-  createSupplier: (payload: { nom: string; adresse?: string | null }) =>
-    request<{ id: string; nom: string; adresse: string | null }>("/fournisseurs", {
-      method: "POST",
+    deleteSupplierOrder: (id: string) =>
+      request<void>(`/fournisseurs/commandes/${id}`, {
+        method: "DELETE",
+      }),
+    getSuppliers: (params?: { etablissementId?: string }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.etablissementId) {
+        searchParams.set("etablissementId", params.etablissementId);
+      }
+      const query = searchParams.toString();
+      return request<Array<{ id: string; nom: string; adresse: string | null }>>(
+        `/fournisseurs${query ? `?${query}` : ""}`,
+      );
+    },
+    createSupplier: (payload: { nom: string; adresse?: string | null }) =>
+      request<{ id: string; nom: string; adresse: string | null }>("/fournisseurs", {
+        method: "POST",
       body: JSON.stringify(payload),
     }),
   updateSupplier: (id: string, payload: { nom: string; adresse?: string | null }) =>
