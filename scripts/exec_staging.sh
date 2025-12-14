@@ -47,6 +47,19 @@ if [ ! -f "$ENV_FILE_STAGING" ]; then
 fi
 echo "✅ Fichier d'environnement utilisé pour STAGING : $ENV_FILE_STAGING"
 
+# ---------- FONCTION MIGRATION PRISMA ----------
+run_migrations() {
+  local env_file="$1"
+  local project_name="$2"
+
+  echo "📜 Exécution des migrations Prisma (${env_file})"
+  docker compose \
+    -f "$COMPOSE_FILE" \
+    --env-file "$env_file" \
+    -p "$project_name" \
+    run --rm server npx prisma migrate deploy
+}
+
 # ---------- STOP STAGING ----------
 echo "🛑 Arrêt des conteneurs existants (STAGING)"
 docker compose \
@@ -109,6 +122,11 @@ fi
 wait_healthy "$PROD_DB_CONTAINER" "DB PROD"
 wait_healthy "$STAGING_DB_CONTAINER" "DB STAGING"
 
+# ---------- MIGRATIONS PROD ----------
+if [ -f "$ENV_FILE_PROD" ]; then
+  run_migrations "$ENV_FILE_PROD" "gestion-de-stock"
+fi
+
 # ---------- COPIE PROD → STAGING ----------
 echo "💾 Copie de la base PROD → STAGING"
 echo "    PROD    : $PROD_DB_USER@$PROD_DB_NAME"
@@ -122,14 +140,9 @@ docker exec "$PROD_DB_CONTAINER" mysqldump \
 echo "✅ Copie de la base terminée"
 
 # ---------- MIGRATIONS PRISMA SUR STAGING ----------
-echo "📜 Exécution des migrations Prisma sur STAGING (si besoin)"
-docker compose \
-  -f "$COMPOSE_FILE" \
-  --env-file "$ENV_FILE_STAGING" \
-  -p "$STAGING_PROJECT_NAME" \
-  run --rm server npx prisma migrate deploy || {
-    echo "⚠️  Attention : échec des migrations Prisma STAGING (vérifie les logs)."
-}
+if ! run_migrations "$ENV_FILE_STAGING" "$STAGING_PROJECT_NAME"; then
+  echo "⚠️  Attention : échec des migrations Prisma STAGING (vérifie les logs)."
+fi
 
 # ---------- STACK COMPLET STAGING ----------
 echo "🚢 Rebuild & démarrage des conteneurs STAGING"

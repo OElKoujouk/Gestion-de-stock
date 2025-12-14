@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { UserPermissionsFields } from "@/components/super-admin/UserPermissionsFields";
 import { defaultPermissionsForRole, type UserPermissions } from "@/lib/permissions";
 import type { RoleSelection } from "@/types/roles";
+import { useCallback } from "react";
 
 type Establishment = { id: string; nom: string };
 type User = {
@@ -41,6 +42,8 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [permissions, setPermissions] = useState<UserPermissions>(defaultPermissionsForRole("agent"));
+  const [responsableDomains, setResponsableDomains] = useState<Array<{ domain: string; responsable: string }>>([]);
+  const [domainsLoading, setDomainsLoading] = useState(false);
 
   useEffect(() => {
     if (open && user) {
@@ -77,6 +80,40 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
       setLoading(false);
     }
   }, [open, user]);
+
+  const loadResponsableDomains = useCallback(
+    (tenantId: string | null) => {
+      if (!tenantId) {
+        setResponsableDomains([]);
+        return;
+      }
+      setDomainsLoading(true);
+      api
+        .getUsers()
+        .then((users) => {
+          const pairs = users
+            .filter((u) => u.role === "responsable" && u.etablissementId === tenantId && u.domaine)
+            .map((u) => ({ domain: u.domaine as string, responsable: u.nom }));
+          const unique = new Map<string, { domain: string; responsable: string }>();
+          pairs.forEach((pair) => {
+            if (!unique.has(pair.domain)) unique.set(pair.domain, pair);
+          });
+          setResponsableDomains(Array.from(unique.values()));
+        })
+        .catch(() => setResponsableDomains([]))
+        .finally(() => setDomainsLoading(false));
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!open || !user) return;
+    if (form.role !== "agent") {
+      setResponsableDomains([]);
+      return;
+    }
+    loadResponsableDomains(form.etablissementId || null);
+  }, [open, user, form.role, form.etablissementId, loadResponsableDomains]);
 
   useEffect(() => {
     if (!open) {
@@ -171,16 +208,39 @@ export function EditUserDialog({ open, user, onOpenChange, onUpdated, establishm
                 <option value="agent">Agent d&apos;entretien</option>
               </select>
             </label>
-            <label className="text-sm font-semibold text-slate-800">
-              Domaine / pôle
-              <input
-                type="text"
-                value={form.domaine}
-                onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
-                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                placeholder="Informatique, Ménage..."
-              />
-            </label>
+            {form.role === "agent" ? (
+              <label className="text-sm font-semibold text-slate-800">
+                Domaine (agents) — reprend les domaines de vos responsables
+                <select
+                  value={form.domaine}
+                  onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  disabled={domainsLoading}
+                >
+                  <option value="">Sélectionner...</option>
+                  {responsableDomains.map((entry) => (
+                    <option key={entry.domain} value={entry.domain}>
+                      {entry.domain} (rattaché à {entry.responsable})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Basé sur les responsables de l&apos;établissement sélectionné.
+                  {domainsLoading ? " Chargement..." : responsableDomains.length === 0 ? " Aucun domaine disponible pour cet établissement." : ""}
+                </p>
+              </label>
+            ) : (
+              <label className="text-sm font-semibold text-slate-800">
+                Domaine / pôle
+                <input
+                  type="text"
+                  value={form.domaine}
+                  onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
+                  className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Informatique, Ménage..."
+                />
+              </label>
+            )}
             {canSelectTenant ? (
               <label className="text-sm font-semibold text-slate-800">
                 Etablissement

@@ -46,6 +46,8 @@ export function CreateUserForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [permissions, setPermissions] = useState<UserPermissions>(defaultPermissionsForRole("responsable"));
+  const [responsableDomains, setResponsableDomains] = useState<Array<{ domain: string; responsable: string }>>([]);
+  const [domainsLoading, setDomainsLoading] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -75,6 +77,36 @@ export function CreateUserForm({
       document.body.style.overflow = originalOverflow;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (form.role !== "agent") {
+      setResponsableDomains([]);
+      return;
+    }
+    const targetTenant = forcedTenantId ?? form.etablissementId;
+    if (!targetTenant) {
+      setResponsableDomains([]);
+      return;
+    }
+    setDomainsLoading(true);
+    api
+      .getUsers()
+      .then((users) => {
+        const pairs = users
+          .filter((user) => user.role === "responsable" && user.etablissementId === targetTenant && user.domaine)
+          .map((user) => ({ domain: user.domaine as string, responsable: user.nom }));
+        const uniqueByDomain = new Map<string, { domain: string; responsable: string }>();
+        pairs.forEach((pair) => {
+          if (!uniqueByDomain.has(pair.domain)) {
+            uniqueByDomain.set(pair.domain, pair);
+          }
+        });
+        setResponsableDomains(Array.from(uniqueByDomain.values()));
+      })
+      .catch(() => setResponsableDomains([]))
+      .finally(() => setDomainsLoading(false));
+  }, [open, form.role, form.etablissementId, forcedTenantId]);
 
   if (!open) return null;
 
@@ -154,16 +186,39 @@ export function CreateUserForm({
                 required
               />
             </label>
-            <label className="text-sm font-semibold text-slate-800">
-              Domaine / pôle (ex. Informatique, Ménage)
-              <input
-                type="text"
-                value={form.domaine}
-                onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
-                className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-              placeholder="Informatique, Ménage..."
-            />
-          </label>
+            {form.role === "agent" ? (
+              <label className="text-sm font-semibold text-slate-800">
+                Domaine (agents) — reprend les domaines de vos responsables
+                <select
+                  value={form.domaine}
+                  onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  disabled={domainsLoading}
+                >
+                  <option value="">Sélectionner...</option>
+                  {responsableDomains.map((entry) => (
+                    <option key={entry.domain} value={entry.domain}>
+                      {entry.domain} (rattaché à {entry.responsable})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Basé sur les responsables de l&apos;établissement sélectionné.
+                  {domainsLoading ? " Chargement..." : responsableDomains.length === 0 ? " Aucun domaine disponible pour cet établissement." : ""}
+                </p>
+              </label>
+            ) : (
+              <label className="text-sm font-semibold text-slate-800">
+                Domaine / pôle (ex. Informatique, Ménage)
+                <input
+                  type="text"
+                  value={form.domaine}
+                  onChange={(e) => setForm((f) => ({ ...f, domaine: e.target.value }))}
+                  className="mt-1 rounded-xl border-2 border-slate-200/80 px-3 py-2 text-sm shadow-inner focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Informatique, Ménage..."
+                />
+              </label>
+            )}
             <label className="text-sm font-semibold text-slate-800">
               Rôle
               <select

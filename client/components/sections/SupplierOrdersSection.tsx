@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 
 import { Card, CardHeader } from "@/components/ui/card";
@@ -15,6 +15,7 @@ type Article = {
   quantite: number;
   referenceFournisseur: string | null;
   seuilAlerte: number;
+  categorieId?: string | null;
 };
 
 type SupplierProfile = {
@@ -40,14 +41,18 @@ export function SupplierOrdersSection() {
   const canManageSupplierOrders = hasAbility("manageSupplierOrders");
   const canSubmitOrders = canManageSupplierOrders && !isSuperAdmin;
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ State base ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  /*  State base  */
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Array<{ id: string; nom: string }>>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
 
   const [supplierName, setSupplierName] = useState("");
-  const [supplierAddress, setSupplierAddress] = useState("");
+  const [supplierAddressLine, setSupplierAddressLine] = useState("");
+  const [supplierZip, setSupplierZip] = useState("");
+  const [supplierCity, setSupplierCity] = useState("");
   const [suppliers, setSuppliers] = useState<SupplierProfile[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [suppliersLoading, setSuppliersLoading] = useState(false);
@@ -66,8 +71,9 @@ export function SupplierOrdersSection() {
   const [editingItems, setEditingItems] = useState<Record<string, number>>({});
   const [expandedOrders, setExpandedOrders] = useState<string[]>([]);
   const [modifiedOrders, setModifiedOrders] = useState<Set<string>>(new Set());
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Fetch donn├®es ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  /*  Fetch données  */
 
   useEffect(() => {
     setLoading(true);
@@ -129,17 +135,60 @@ export function SupplierOrdersSection() {
       .finally(() => setSuppliersLoading(false));
   }, [canManageSupplierOrders, isSuperAdmin]);
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ D├®riv├®s / m├®mo ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  useEffect(() => {
+    if (!canManageSupplierOrders || isSuperAdmin) {
+      setCategories([]);
+      return;
+    }
+    setCategoriesLoading(true);
+    api
+      .getCategories()
+      .then((data) => {
+        setCategories(data);
+      })
+      .catch(() => setCategories([]))
+      .finally(() => setCategoriesLoading(false));
+  }, [canManageSupplierOrders, isSuperAdmin]);
+
+  /*  Dérivés / mémo  */
 
   const filteredArticles = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return articles;
-    return articles.filter(
-      (article) =>
+    return articles.filter((article) => {
+      const matchesQuery =
+        !query ||
         article.nom.toLowerCase().includes(query) ||
-        (article.referenceFournisseur ?? "").toLowerCase().includes(query),
-    );
-  }, [articles, search]);
+        (article.referenceFournisseur ?? "").toLowerCase().includes(query);
+      const matchesCategory =
+        !selectedCategoryId ||
+        (selectedCategoryId === "none" && !article.categorieId) ||
+        article.categorieId === selectedCategoryId;
+      return matchesQuery && matchesCategory;
+    });
+  }, [articles, search, selectedCategoryId]);
+
+  const categoryName = useCallback(
+    (categoryId: string | null | undefined) => {
+      if (!categoryId) return "Sans catégorie";
+      const found = categories.find((c) => c.id === categoryId);
+      return found?.nom ?? "Catégorie";
+    },
+    [categories],
+  );
+
+  const articlesByCategory = useMemo(() => {
+    const groups = new Map<string, Article[]>();
+    filteredArticles.forEach((article) => {
+      const catId = article.categorieId ?? "none";
+      if (!groups.has(catId)) groups.set(catId, []);
+      groups.get(catId)!.push(article);
+    });
+    return Array.from(groups.entries()).map(([catId, list]) => ({
+      id: catId,
+      label: categoryName(catId === "none" ? null : catId),
+      items: list,
+    }));
+  }, [filteredArticles, categoryName]);
 
   const selectedItems = useMemo(
     () =>
@@ -166,7 +215,21 @@ export function SupplierOrdersSection() {
 
   const resetSelection = () => setQuantities({});
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Helpers formulaire ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  /*  Helpers formulaire  */
+
+  const buildAddressText = (addressLine: string, zip: string, city: string) => {
+    const zipCity = [zip.trim(), city.trim()].filter(Boolean).join(" ");
+    return [addressLine.trim(), zipCity].filter(Boolean).join(" · ");
+  };
+
+  const parseAddressText = (value: string | null | undefined) => {
+    const raw = (value ?? "").trim();
+    if (!raw) return { address: "", zip: "", city: "" };
+    const [line, zipCity] = raw.split("·").map((part) => part.trim());
+    if (!zipCity) return { address: line ?? "", zip: "", city: "" };
+    const [zip, ...cityParts] = zipCity.split(/\s+/);
+    return { address: line ?? "", zip: zip ?? "", city: cityParts.join(" ").trim() };
+  };
 
   const validateForm = () => {
     if (!supplierName.trim()) {
@@ -174,7 +237,7 @@ export function SupplierOrdersSection() {
       return false;
     }
     if (selectedItems.length === 0) {
-      setSubmitMessage("Choisissez au moins un produit ├á commander.");
+      setSubmitMessage("Choisissez au moins un produit à commander.");
       return false;
     }
     return true;
@@ -187,21 +250,27 @@ export function SupplierOrdersSection() {
       return;
     }
 
+    const addressText = buildAddressText(
+      supplierAddressLine,
+      supplierZip,
+      supplierCity,
+    );
+
     const existing = suppliers.find(
       (s) =>
         s.nom === supplierName.trim() &&
-        (s.adresse ?? "").trim() === supplierAddress.trim(),
+        (s.adresse ?? "").trim() === addressText.trim(),
     );
     if (existing) {
       setSelectedSupplierId(existing.id);
-      setSubmitMessage("Fournisseur d├®j├á enregistr├®, s├®lection mise ├á jour.");
+      setSubmitMessage("Fournisseur déjà enregistré, sélection mise à jour.");
       return;
     }
 
     const profile: SupplierProfile = {
       id: "",
       nom: supplierName.trim(),
-      adresse: supplierAddress.trim(),
+      adresse: addressText,
     };
 
     api
@@ -214,7 +283,7 @@ export function SupplierOrdersSection() {
         };
         setSuppliers((prev) => [enriched, ...prev]);
         setSelectedSupplierId(created.id);
-        setSubmitMessage("Fournisseur enregistr├® en base.");
+        setSubmitMessage("Fournisseur enregistré en base.");
       })
       .catch((err) => {
         setSubmitMessage(
@@ -230,7 +299,10 @@ export function SupplierOrdersSection() {
     const supplier = suppliers.find((s) => s.id === supplierId);
     if (supplier) {
       setSupplierName(supplier.nom);
-      setSupplierAddress(supplier.adresse ?? "");
+      const parsed = parseAddressText(supplier.adresse);
+      setSupplierAddressLine(parsed.address);
+      setSupplierZip(parsed.zip);
+      setSupplierCity(parsed.city);
     }
   };
 
@@ -239,27 +311,41 @@ export function SupplierOrdersSection() {
     if (selectedSupplierId === supplierId) {
       setSelectedSupplierId("");
       setSupplierName("");
-      setSupplierAddress("");
+      setSupplierAddressLine("");
+      setSupplierZip("");
+      setSupplierCity("");
     }
   };
 
   const handleUpdateSupplier = () => {
     if (!selectedSupplierId) {
-      setSubmitMessage("S├®lectionnez un fournisseur ├á modifier.");
+      setSubmitMessage("Sélectionnez un fournisseur à modifier.");
       return;
     }
     if (!supplierName.trim()) {
       setSubmitMessage("Nom du fournisseur requis.");
       return;
     }
+    const addressText = buildAddressText(
+      supplierAddressLine,
+      supplierZip,
+      supplierCity,
+    );
     api
-      .updateSupplier(selectedSupplierId, { nom: supplierName.trim(), adresse: supplierAddress.trim() || null })
+      .updateSupplier(selectedSupplierId, {
+        nom: supplierName.trim(),
+        adresse: addressText || null,
+      })
       .then((updated) => {
-        setSuppliers((prev) => prev.map((s) => (s.id === updated.id ? { ...updated } : s)));
-        setSubmitMessage("Fournisseur mis ├á jour.");
+        setSuppliers((prev) =>
+          prev.map((s) =>
+            s.id === updated.id ? { ...updated, adresse: addressText } : s,
+          ),
+        );
+        setSubmitMessage("Fournisseur mis à jour.");
       })
       .catch((err) => {
-        setSubmitMessage(err instanceof Error ? err.message : "Impossible de mettre ├á jour le fournisseur");
+        setSubmitMessage(err instanceof Error ? err.message : "Impossible de mettre à jour le fournisseur");
       });
   };
 
@@ -269,14 +355,19 @@ export function SupplierOrdersSection() {
 
     setSubmitting(true);
     try {
+      const addressText = buildAddressText(
+        supplierAddressLine,
+        supplierZip,
+        supplierCity,
+      );
       const payload: {
         fournisseur: string;
         supplierId?: string;
         items: Array<{ articleId: string; quantite: number }>;
       } = {
         fournisseur:
-          supplierAddress.trim() && !selectedSupplierId
-            ? `${supplierName.trim()} ÔÇö ${supplierAddress.trim()}`
+          addressText.trim() && !selectedSupplierId
+            ? `${supplierName.trim()} - ${addressText.trim()}`
             : supplierName.trim(),
         items: selectedItems.map((item) => ({
           articleId: item.articleId,
@@ -288,7 +379,7 @@ export function SupplierOrdersSection() {
 
       const created = await api.createSupplierOrder(payload);
 
-      setSubmitMessage("Commande fournisseur cr├®├®e avec succ├¿s.");
+      setSubmitMessage("Commande fournisseur créée avec succès.");
       setOrders((prev) => [
         {
           id: created.id,
@@ -305,55 +396,263 @@ export function SupplierOrdersSection() {
       setSubmitMessage(
         err instanceof Error
           ? err.message
-          : "Impossible de cr├®er la commande fournisseur",
+          : "Impossible de créer la commande fournisseur",
       );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleGenerateOrderPdf = (order: SupplierOrder) => {
-    const doc = new jsPDF();
-    const now = new Date();
-    const formattedDate = now.toLocaleDateString();
-    const supplierLabel = order.supplier?.nom || order.fournisseur || "Fournisseur";
-    const supplierAdresse = order.supplier?.adresse || "";
+const handleGenerateOrderPdf = (order: SupplierOrder) => {
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
 
-    doc.setFontSize(16);
-    doc.text("Bon de commande fournisseur", 105, 18, { align: "center" });
-    doc.setFontSize(11);
-    doc.text(`Date : ${formattedDate}`, 14, 28);
-    doc.text(`Fournisseur : ${supplierLabel}`, 14, 35);
-    if (supplierAdresse) {
-      doc.text(`Adresse : ${supplierAdresse}`, 14, 42);
-    }
-    if (order.statut === "en_cours") {
-      doc.text("Statut : En attente de r├®ception", 14, 49);
-    } else {
-      doc.text("Statut : Re├ºue", 14, 49);
-    }
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
 
-    doc.setFontSize(12);
-    doc.text("Articles", 14, 60);
-    let y = 65;
-    order.items.forEach((item, index) => {
-      const label = articles.find((a) => a.id === item.articleId)?.nom ?? "Article";
-      doc.setFontSize(11);
-      doc.text(`${index + 1}. ${label}`, 14, y);
-      doc.setFontSize(10);
-      doc.text(`Quantit├®: ${item.quantite}`, 14, y + 6);
-      doc.line(14, y + 8, 196, y + 8);
-      y += 14;
-    });
+  const M = 40; // marge
+  const headerH = 72;
+  const footerH = 36;
 
-    const safeName = supplierLabel.replace(/\s+/g, "-").toLowerCase();
-    doc.save(`bon-commande-${safeName}.pdf`);
+  const fontMain = "helvetica";
+
+  const formatDate = (iso?: string) => {
+    const d = iso ? new Date(iso) : new Date();
+    return d.toLocaleDateString("fr-FR");
   };
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ Commandes (├®dition / statut) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  const safeText = (v: unknown) => (v ?? "").toString();
+
+  const supplierLabel = order.supplier?.nom || order.fournisseur || "Fournisseur";
+  const supplierAddress =
+    order.supplier?.adresse ||
+    (() => {
+      const parts = safeText(order.fournisseur).split(" - ");
+      return parts.length > 1 ? parts.slice(1).join(" - ").trim() : "";
+    })();
+
+  const statusLabel = order.statut === "en_cours" ? "En attente de réception" : "Reçue";
+
+  const rows = order.items.map((it, idx) => {
+    const art = articles.find((a) => a.id === it.articleId);
+    return {
+      idx: String(idx + 1),
+      nom: art?.nom ?? "Article",
+      ref: art?.referenceFournisseur ?? "—",
+      qty: String(it.quantite),
+    };
+  });
+
+  const totalQty = order.items.reduce((sum, it) => sum + (Number(it.quantite) || 0), 0);
+
+  const drawHeader = () => {
+    // bandeau
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageW, headerH, "F");
+
+    doc.setFont(fontMain, "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.text("Bon de commande fournisseur", M, 42);
+
+    doc.setFont(fontMain, "normal");
+    doc.setFontSize(10);
+    doc.text(`Date : ${formatDate(order.createdAt)}`, pageW - M, 28, { align: "right" });
+    doc.text(`Statut : ${statusLabel}`, pageW - M, 44, { align: "right" });
+
+    doc.setTextColor(15, 23, 42);
+  };
+
+  const drawFooter = (pageNumber: number, totalPages: number) => {
+    doc.setDrawColor(226, 232, 240);
+    doc.line(M, pageH - footerH, pageW - M, pageH - footerH);
+
+    doc.setFont(fontMain, "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Page ${pageNumber} / ${totalPages}`, pageW - M, pageH - 14, { align: "right" });
+    doc.setTextColor(15, 23, 42);
+  };
+
+  const drawSupplierBlock = (startY: number) => {
+    const boxY = startY;
+    const boxW = pageW - M * 2;
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(M, boxY, boxW, 86, 10, 10, "FD");
+
+    doc.setFont(fontMain, "bold");
+    doc.setFontSize(11);
+    doc.text("Fournisseur", M + 14, boxY + 22);
+
+    doc.setFont(fontMain, "normal");
+    doc.setFontSize(10);
+
+    const supplierLines = doc.splitTextToSize(supplierLabel, boxW - 28);
+    doc.text(supplierLines, M + 14, boxY + 40);
+
+    if (supplierAddress) {
+      const addrLines = doc.splitTextToSize(`Adresse : ${supplierAddress}`, boxW - 28);
+      doc.setTextColor(71, 85, 105);
+      doc.text(addrLines, M + 14, boxY + 58);
+      doc.setTextColor(15, 23, 42);
+    }
+
+    return boxY + 86 + 16;
+  };
+
+  const col = {
+    idx: { x: M, w: 34 },
+    nom: { x: M + 34, w: 300 },
+    ref: { x: M + 34 + 300, w: 140 },
+    qty: { x: M + 34 + 300 + 140, w: pageW - M - (M + 34 + 300 + 140) },
+  };
+
+  const drawTableHeader = (y: number) => {
+    doc.setFillColor(241, 245, 249);
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(M, y, pageW - M * 2, 28, "FD");
+
+    doc.setFont(fontMain, "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text("#", col.idx.x + 10, y + 18);
+    doc.text("Produit", col.nom.x + 10, y + 18);
+    doc.text("Référence", col.ref.x + 10, y + 18);
+    doc.text("Qté", col.qty.x + col.qty.w - 10, y + 18, { align: "right" });
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont(fontMain, "normal");
+  };
+
+  const lineH = 14;
+
+  const drawRow = (y: number, r: { idx: string; nom: string; ref: string; qty: string }, zebra: boolean) => {
+    const nomLines = doc.splitTextToSize(r.nom, col.nom.w - 20);
+    const refLines = doc.splitTextToSize(r.ref, col.ref.w - 20);
+
+    const rowLines = Math.max(nomLines.length, refLines.length, 1);
+    const rowH = Math.max(26, rowLines * lineH + 12);
+
+    if (zebra) {
+      doc.setFillColor(252, 252, 253);
+      doc.rect(M, y, pageW - M * 2, rowH, "F");
+    }
+
+    doc.setDrawColor(241, 245, 249);
+    doc.line(M, y + rowH, pageW - M, y + rowH);
+
+    doc.setFontSize(10);
+    doc.text(r.idx, col.idx.x + 10, y + 18);
+
+    doc.text(nomLines, col.nom.x + 10, y + 18);
+    doc.setTextColor(71, 85, 105);
+    doc.text(refLines, col.ref.x + 10, y + 18);
+    doc.setTextColor(15, 23, 42);
+
+    doc.setFont(fontMain, "bold");
+    doc.text(r.qty, col.qty.x + col.qty.w - 10, y + 18, { align: "right" });
+    doc.setFont(fontMain, "normal");
+
+    return rowH;
+  };
+
+  const drawTotalsAndSign = (y: number) => {
+    const boxW = pageW - M * 2;
+
+    // Totaux
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(M, y, boxW, 54, 10, 10, "FD");
+
+    doc.setFont(fontMain, "bold");
+    doc.setFontSize(11);
+    doc.text("Récapitulatif", M + 14, y + 22);
+
+    doc.setFont(fontMain, "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Nombre d'articles : ${rows.length}`, M + 14, y + 40);
+    doc.text(`Quantité totale : ${totalQty}`, pageW - M - 14, y + 40, { align: "right" });
+    doc.setTextColor(15, 23, 42);
+
+    // Signatures
+    const sY = y + 54 + 18;
+    const half = (boxW - 16) / 2;
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(M, sY, half, 70, 10, 10, "FD");
+    doc.roundedRect(M + half + 16, sY, half, 70, 10, 10, "FD");
+
+    doc.setFont(fontMain, "bold");
+    doc.setFontSize(10);
+    doc.text("Signature fournisseur", M + 14, sY + 20);
+    doc.text("Signature réception", M + half + 16 + 14, sY + 20);
+
+    doc.setFont(fontMain, "normal");
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(9);
+    doc.text("Nom + cachet", M + 14, sY + 38);
+    doc.text("Nom + date", M + half + 16 + 14, sY + 38);
+    doc.setTextColor(15, 23, 42);
+
+    return sY + 70;
+  };
+
+  // ── Construction pages
+  drawHeader();
+
+  let y = headerH + 18;
+  y = drawSupplierBlock(y);
+
+  drawTableHeader(y);
+  y += 28;
+
+  rows.forEach((r, i) => {
+    // si dépassement : nouvelle page + header + table header
+    const previewNomLines = doc.splitTextToSize(r.nom, col.nom.w - 20);
+    const previewRefLines = doc.splitTextToSize(r.ref, col.ref.w - 20);
+    const rowLines = Math.max(previewNomLines.length, previewRefLines.length, 1);
+    const rowH = Math.max(26, rowLines * lineH + 12);
+
+    if (y + rowH > pageH - footerH - 140) {
+      doc.addPage();
+      drawHeader();
+      y = headerH + 18;
+      drawTableHeader(y);
+      y += 28;
+    }
+
+    const usedH = drawRow(y, r, i % 2 === 1);
+    y += usedH;
+  });
+
+  // Totaux + signatures (si pas la place : nouvelle page)
+  if (y + 170 > pageH - footerH - 10) {
+    doc.addPage();
+    drawHeader();
+    y = headerH + 18;
+  }
+  drawTotalsAndSign(y + 14);
+
+  // Pied de page avec pagination (après génération)
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p += 1) {
+    doc.setPage(p);
+    drawFooter(p, totalPages);
+  }
+
+  const safeName = supplierLabel.replace(/\s+/g, "-").replace(/[^\w-]/g, "").toLowerCase();
+  doc.save(`bon-commande-${safeName || "fournisseur"}.pdf`);
+};
+
+
+  /*  Commandes (édition / statut)  */
 
   const handleMarkReceived = async (orderId: string) => {
-    if (!window.confirm("├ètes-vous s├╗r de valider la r├®ception de cette commande ?")) {
+    if (!window.confirm("Êtes-vous sûr de valider la réception de cette commande ?")) {
       return;
     }
     try {
@@ -398,12 +697,26 @@ export function SupplierOrdersSection() {
       setModifiedOrders((prev) => new Set(prev).add(order.id));
       setEditingOrderId(null);
       setEditingItems({});
-      setSubmitMessage("Commande mise ├á jour.");
+      setSubmitMessage("Commande mise à jour.");
     } catch (err) {
       setOrdersError(
         err instanceof Error
           ? err.message
           : "Impossible de modifier la commande",
+      );
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm("Supprimer définitivement cette commande fournisseur ?")) {
+      return;
+    }
+    try {
+      await api.deleteSupplierOrder(orderId);
+      setOrders((prev) => prev.filter((order) => order.id !== orderId));
+    } catch (err) {
+      setOrdersError(
+        err instanceof Error ? err.message : "Impossible de supprimer la commande",
       );
     }
   };
@@ -416,14 +729,14 @@ export function SupplierOrdersSection() {
     );
   };
 
-  /* ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ JSX ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */
+  /*  JSX  */
 
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Commandes fournisseurs"
-        title="Pr├®parer un bon de commande"
-        description="S├®lectionnez les articles du stock, renseignez le fournisseur, g├®n├®rez un PDF et suivez vos commandes en cours."
+        title="Préparer un bon de commande"
+        description="Sélectionnez les articles du stock, renseignez le fournisseur, générez un PDF et suivez vos commandes en cours."
       />
 
       {/* Stats rapides */}
@@ -433,19 +746,19 @@ export function SupplierOrdersSection() {
             Fournisseur
           </p>
           <p className="mt-1 text-sm font-semibold text-slate-900">
-            {supplierName.trim() || "Aucun fournisseur s├®lectionn├®"}
+            {supplierName.trim() || "Aucun fournisseur sélectionné"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-4 py-3 shadow-sm">
           <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-            Articles s├®lectionn├®s
+            Articles sélectionnés
           </p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">
             {selectedItemsCount}
           </p>
           {selectedItemsCount > 0 ? (
             <p className="text-xs text-slate-500">
-              {selectedTotalQuantity} unit├®s au total
+              {selectedTotalQuantity} unités au total
             </p>
           ) : null}
         </div>
@@ -459,9 +772,9 @@ export function SupplierOrdersSection() {
         </div>
       </div>
 
-      {/* Layout 2 colonnes : gauche (pr├®paration), droite (suivi) */}
+      {/* Layout 2 colonnes : gauche (préparation), droite (suivi) */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        {/* Colonne gauche : fournisseur + s├®lection articles */}
+        {/* Colonne gauche : fournisseur + sélection articles */}
         <div className="space-y-6">
           {/* Fournisseur */}
           <Card className="border-slate-200">
@@ -471,7 +784,7 @@ export function SupplierOrdersSection() {
               action={
                 isSuperAdmin ? (
                   <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                    Superadmin : cr├®ez la commande via un r├┤le ├®tablissement
+                    Superadmin : créez la commande via un rôle établissement
                   </span>
                 ) : null
               }
@@ -488,7 +801,7 @@ export function SupplierOrdersSection() {
                     }
                     disabled={!canManageSupplierOrders}
                   >
-                    <option value="">S├®lectionner...</option>
+                    <option value="">Sélectionner...</option>
                     {suppliers.map((supplier) => (
                       <option key={supplier.id} value={supplier.id}>
                         {supplier.nom}
@@ -512,7 +825,7 @@ export function SupplierOrdersSection() {
                       onClick={handleUpdateSupplier}
                       disabled={!canManageSupplierOrders}
                     >
-                      Mettre ├á jour
+                      Mettre à jour
                     </button>
                   ) : null}
                 </div>
@@ -537,16 +850,38 @@ export function SupplierOrdersSection() {
                     disabled={!canManageSupplierOrders}
                   />
                 </label>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="text-sm font-medium text-slate-700 md:col-span-2">
+                    Adresse
+                    <input
+                      type="text"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
+                      placeholder="12 rue des Fleurs"
+                      value={supplierAddressLine}
+                      onChange={(event) => setSupplierAddressLine(event.target.value)}
+                      disabled={!canManageSupplierOrders}
+                    />
+                  </label>
+                  <label className="text-sm font-medium text-slate-700">
+                    Code postal
+                    <input
+                      type="text"
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
+                      placeholder="75000"
+                      value={supplierZip}
+                      onChange={(event) => setSupplierZip(event.target.value)}
+                      disabled={!canManageSupplierOrders}
+                    />
+                  </label>
+                </div>
                 <label className="text-sm font-medium text-slate-700">
-                  Adresse du fournisseur
+                  Ville
                   <input
                     type="text"
                     className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
-                    placeholder="Adresse, code postal, ville"
-                    value={supplierAddress}
-                    onChange={(event) =>
-                      setSupplierAddress(event.target.value)
-                    }
+                    placeholder="Paris"
+                    value={supplierCity}
+                    onChange={(event) => setSupplierCity(event.target.value)}
                     disabled={!canManageSupplierOrders}
                   />
                 </label>
@@ -555,19 +890,19 @@ export function SupplierOrdersSection() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-              className="rounded-full bg-slate-100 px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-200 disabled:opacity-50"
-              onClick={() => handleAddSupplier()}
-              disabled={!canManageSupplierOrders || isSuperAdmin}
-            >
-              Enregistrer ce fournisseur
-            </button>
-          </div>
+                  className="rounded-full bg-slate-100 px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-200 disabled:opacity-50"
+                  onClick={() => handleAddSupplier()}
+                  disabled={!canManageSupplierOrders || isSuperAdmin}
+                >
+                  Enregistrer ce fournisseur
+                </button>
+              </div>
 
               <p className="text-xs text-slate-500">
-                Les commandes sont disponibles pour les r├┤les{" "}
+                Les commandes sont disponibles pour les rôles{" "}
                 <span className="font-semibold">admin</span> /{" "}
-                <span className="font-semibold">responsable</span> reli├®s ├á un
-                ├®tablissement.
+                <span className="font-semibold">responsable</span> reliés à un
+                établissement.
               </p>
               {submitMessage ? (
                 <p className="text-sm text-slate-700">{submitMessage}</p>
@@ -579,23 +914,37 @@ export function SupplierOrdersSection() {
           <Card>
             <CardHeader
               title="Articles du stock"
-              subtitle="Choisissez les quantit├®s ├á commander"
+              subtitle="Choisissez les quantités à commander"
               action={
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="search"
-                      placeholder="Rechercher un produit ou une r├®f├®rence"
+                      placeholder="Rechercher un produit ou une référence"
                       className="w-64 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                     />
+                    <select
+                      className="w-56 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
+                      value={selectedCategoryId}
+                      onChange={(event) => setSelectedCategoryId(event.target.value)}
+                      disabled={categoriesLoading}
+                    >
+                      <option value="">Toutes les catégories</option>
+                      <option value="none">Sans catégorie</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.nom}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
                       onClick={resetSelection}
                     >
-                      Effacer les quantit├®s
+                      Effacer les quantités
                     </button>
                   </div>
                   <button
@@ -604,7 +953,7 @@ export function SupplierOrdersSection() {
                     onClick={handleCreateOrder}
                     disabled={!canSubmitOrders || submitting}
                   >
-                    {submitting ? "Cr├®ation..." : "Cr├®er la commande fournisseur"}
+                    {submitting ? "Création..." : "Créer la commande fournisseur"}
                   </button>
                 </div>
               }
@@ -617,75 +966,85 @@ export function SupplierOrdersSection() {
               <p className="px-4 pb-4 text-sm text-rose-600">{error}</p>
             ) : filteredArticles.length === 0 ? (
               <p className="px-4 pb-4 text-sm text-slate-500">
-                Aucun article trouv├®.
+                Aucun article trouvé.
               </p>
             ) : (
-              <div className="divide-y divide-slate-100 text-sm">
-                <div className="grid items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid-cols-[1.5fr_minmax(0,1fr)] sm:text-xs">
-                  <div className="sm:flex sm:items-center sm:gap-2">
-                    <span>Produit</span>
-                  </div>
-                  <div className="grid grid-cols-3 items-center gap-2 sm:grid-cols-4">
-                    <span className="text-center">R├®f├®rence</span>
-                    <span className="text-center">Stock</span>
-                    <span className="text-center">Qt├® ├á commander</span>
-                    <span className="hidden text-right sm:block">Seuil</span>
-                  </div>
-                </div>
-                {filteredArticles
-                  .slice()
-                  .sort((a, b) => a.nom.localeCompare(b.nom))
-                  .map((article) => {
-                    const quantityValue = quantities[article.id] ?? 0;
-                    const inAlert = article.quantite <= article.seuilAlerte;
-                    return (
-                      <div
-                        key={article.id}
-                        className={cn(
-                          "grid items-center gap-2 px-4 py-2 sm:grid-cols-[1.5fr_minmax(0,1fr)]",
-                          inAlert && "bg-amber-50/60",
-                        )}
-                      >
-                        <div className="space-y-1">
-                          <p className="font-semibold text-slate-900">
-                            {article.nom}
-                          </p>
-                          {inAlert ? (
-                            <span className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
-                              Niveau d&apos;alerte (stock : {article.quantite},
-                              seuil : {article.seuilAlerte})
-                            </span>
-                          ) : null}
+              <div className="space-y-3">
+                {articlesByCategory.map((group) => (
+                  <div key={group.id} className="rounded-2xl border border-slate-200 bg-white/60">
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <p className="text-sm font-semibold text-slate-900">{group.label}</p>
+                      <span className="text-xs text-slate-500">{group.items.length} article(s)</span>
+                    </div>
+                    <div className="divide-y divide-slate-100 text-sm">
+                      <div className="grid items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid-cols-[1.5fr_minmax(0,1fr)] sm:text-xs">
+                        <div className="sm:flex sm:items-center sm:gap-2">
+                          <span>Produit</span>
                         </div>
                         <div className="grid grid-cols-3 items-center gap-2 sm:grid-cols-4">
-                          <span className="text-center text-slate-600">
-                            {article.referenceFournisseur ?? "ÔÇö"}
-                          </span>
-                          <span className="text-center font-semibold text-slate-900">
-                            {article.quantite}
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            className="w-full rounded-full border border-slate-200 px-2 py-1 text-center focus:border-emerald-500/70 focus:outline-none"
-                            value={quantityValue}
-                            onChange={(event) =>
-                              setQuantities((prev) => ({
-                                ...prev,
-                                [article.id]: Math.max(
-                                  0,
-                                  Number(event.target.value),
-                                ),
-                              }))
-                            }
-                          />
-                          <span className="hidden text-right text-slate-600 sm:block">
-                            {article.seuilAlerte}
-                          </span>
+                          <span className="text-center">Référence</span>
+                          <span className="text-center">Stock</span>
+                          <span className="text-center">Qté à commander</span>
+                          <span className="hidden text-right sm:block">Seuil</span>
                         </div>
                       </div>
-                    );
-                  })}
+                      {group.items
+                        .slice()
+                        .sort((a, b) => a.nom.localeCompare(b.nom))
+                        .map((article) => {
+                          const quantityValue = quantities[article.id] ?? 0;
+                          const inAlert = article.quantite <= article.seuilAlerte;
+                          return (
+                            <div
+                              key={article.id}
+                              className={cn(
+                                "grid items-center gap-2 px-4 py-2 sm:grid-cols-[1.5fr_minmax(0,1fr)]",
+                                inAlert && "bg-amber-50/60",
+                              )}
+                            >
+                              <div className="space-y-1">
+                                <p className="font-semibold text-slate-900">
+                                  {article.nom}
+                                </p>
+                                {inAlert ? (
+                                  <span className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
+                                    Niveau d&apos;alerte (stock : {article.quantite},
+                                    seuil : {article.seuilAlerte})
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="grid grid-cols-3 items-center gap-2 sm:grid-cols-4">
+                                <span className="text-center text-slate-600">
+                                  {article.referenceFournisseur ?? " - "}
+                                </span>
+                                <span className="text-center font-semibold text-slate-900">
+                                  {article.quantite}
+                                </span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-full rounded-full border border-slate-200 px-2 py-1 text-center focus:border-emerald-500/70 focus:outline-none"
+                                  value={quantityValue}
+                                  onChange={(event) =>
+                                    setQuantities((prev) => ({
+                                      ...prev,
+                                      [article.id]: Math.max(
+                                        0,
+                                        Number(event.target.value),
+                                      ),
+                                    }))
+                                  }
+                                />
+                                <span className="hidden text-right text-slate-600 sm:block">
+                                  {article.seuilAlerte}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </Card>
@@ -699,7 +1058,7 @@ export function SupplierOrdersSection() {
           />
           {isSuperAdmin ? (
             <p className="px-4 pb-4 text-sm text-slate-500">
-              Connectez-vous avec un r├┤le ├®tablissement (admin ou responsable)
+              Connectez-vous avec un rôle établissement (admin ou responsable)
               pour consulter les commandes.
             </p>
           ) : ordersLoading ? (
@@ -744,7 +1103,7 @@ export function SupplierOrdersSection() {
                             <p className="text-xs text-slate-500">
                               {order.items.length} article(s)
                               {order.createdAt
-                                ? ` ÔÇó ${new Date(
+                                ? `  •  ${new Date(
                                     order.createdAt,
                                   ).toLocaleDateString()}`
                                 : ""}
@@ -753,7 +1112,7 @@ export function SupplierOrdersSection() {
                           <div className="flex flex-wrap items-center gap-2">
                             {modifiedOrders.has(order.id) ? (
                               <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-                                Modifi├®e
+                                Modifiée
                               </span>
                             ) : null}
                             <button
@@ -761,7 +1120,14 @@ export function SupplierOrdersSection() {
                               className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
                               onClick={() => handleGenerateOrderPdf(order)}
                             >
-                              T├®l├®charger le bon
+                              Télécharger le bon
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-full bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                              onClick={() => handleDeleteOrder(order.id)}
+                            >
+                              Supprimer
                             </button>
                             {editingOrderId === order.id ? (
                               <button
@@ -785,7 +1151,7 @@ export function SupplierOrdersSection() {
                               className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500"
                               onClick={() => handleMarkReceived(order.id)}
                             >
-                              Valider la r├®ception
+                              Valider la réception
                             </button>
                           </div>
                         </div>
@@ -843,8 +1209,8 @@ export function SupplierOrdersSection() {
                           onClick={() => toggleExpanded(order.id)}
                         >
                           {expandedOrders.includes(order.id)
-                            ? "Masquer le d├®tail"
-                            : "Voir le d├®tail"}
+                            ? "Masquer le détail"
+                            : "Voir le détail"}
                         </button>
                         {expandedOrders.includes(order.id) ? (
                           <ul className="list-disc space-y-1 pl-4 text-xs text-slate-700">
@@ -855,7 +1221,7 @@ export function SupplierOrdersSection() {
                                 )?.nom ?? "Article";
                               return (
                                 <li key={item.id}>
-                                  {label} ÔÇö {item.quantite}
+                                  {label}  -  {item.quantite}
                                 </li>
                               );
                             })}
@@ -875,7 +1241,7 @@ export function SupplierOrdersSection() {
                       Historique
                     </p>
                     <p className="text-sm font-semibold text-slate-900">
-                      Commandes re├ºues
+                      Commandes reçues
                     </p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
@@ -884,7 +1250,7 @@ export function SupplierOrdersSection() {
                 </div>
                 {receivedOrders.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    Aucune commande re├ºue.
+                    Aucune commande reçue.
                   </p>
                 ) : (
                   <ul className="space-y-2 text-sm">
@@ -900,7 +1266,7 @@ export function SupplierOrdersSection() {
                           <p className="text-xs text-slate-500">
                             {order.items.length} article(s)
                             {order.updatedAt
-                              ? ` ÔÇó Re├ºue le ${new Date(
+                              ? `  •  Reçue le ${new Date(
                                   order.updatedAt,
                                 ).toLocaleDateString()}`
                               : ""}
@@ -909,7 +1275,7 @@ export function SupplierOrdersSection() {
                         <div className="flex flex-wrap items-center gap-2 text-[11px]">
                           {modifiedOrders.has(order.id) ? (
                             <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-                              Modifi├®e avant validation
+                              Modifiée avant validation
                             </span>
                           ) : null}
                           <button
@@ -917,7 +1283,7 @@ export function SupplierOrdersSection() {
                             className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-200"
                             onClick={() => handleGenerateOrderPdf(order)}
                           >
-                            T├®l├®charger le bon
+                            Télécharger le bon
                           </button>
                           <button
                             type="button"
@@ -925,8 +1291,8 @@ export function SupplierOrdersSection() {
                             onClick={() => toggleExpanded(order.id)}
                           >
                             {expandedOrders.includes(order.id)
-                              ? "Masquer le d├®tail"
-                              : "Voir le d├®tail"}
+                              ? "Masquer le détail"
+                              : "Voir le détail"}
                           </button>
                         </div>
                         {expandedOrders.includes(order.id) ? (
@@ -938,7 +1304,7 @@ export function SupplierOrdersSection() {
                                 )?.nom ?? "Article";
                               return (
                                 <li key={item.id}>
-                                  {label} ÔÇö {item.quantite}
+                                  {label}  -  {item.quantite}
                                 </li>
                               );
                             })}
