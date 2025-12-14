@@ -101,12 +101,7 @@ export function StoreManagerSection() {
     return map;
   }, [articles]);
 
-  const lowStockArticles = useMemo(
-    () => articles.filter((article) => article.quantite <= article.seuilAlerte),
-    [articles],
-  );
-
-  const fetchDemandes = useCallback(() => {
+    const fetchDemandes = useCallback(() => {
     setDemandesLoading(true);
 
     const params =
@@ -242,40 +237,7 @@ export function StoreManagerSection() {
           </div>
         </Card>
       ) : (
-        <Card>
-          <CardHeader title="Produits en alerte" subtitle="Quantites au seuil ou en dessous" />
-          {articles.length === 0 ? (
-            <p className="text-sm text-slate-500">Chargement des articles...</p>
-          ) : lowStockArticles.length === 0 ? (
-            <p className="text-sm text-emerald-600">Aucun produit n&apos;est actuellement au seuil.</p>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {lowStockArticles.map((article) => {
-                const deficit = article.seuilAlerte - article.quantite;
-                const ratio = article.seuilAlerte > 0 ? Math.min(article.quantite / article.seuilAlerte, 1) : 1;
-                return (
-                  <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-inner shadow-amber-100">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
-                        <p className="text-xs text-slate-600">
-                          Stock actuel: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
-                          <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-800">
-                        {deficit >= 0 ? `Manque ${deficit}` : "Seuil atteint"}
-                      </span>
-                    </div>
-                    <div className="mt-3 h-2 rounded-full bg-white/70">
-                      <div className="h-full rounded-full bg-amber-400" style={{ width: `${ratio * 100}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
+        null
       )}
 
       <Card>

@@ -202,10 +202,6 @@ export function AdminEstablishmentSection() {
   const filteredArticles = articles;
   const categoryNameById = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.nom])), [categories]);
 
-  const lowStockArticles = useMemo(
-    () => articles.filter((article) => article.quantite <= article.seuilAlerte),
-    [articles],
-  );
 
   const handleCreated = (establishment: Establishment) => {
     setEstablishments((prev) => [establishment, ...prev]);
@@ -684,36 +680,6 @@ export function AdminEstablishmentSection() {
           )}
         </Card>
       </div>
-
-      <Card>
-        <CardHeader title="Alertes seuil" subtitle="Articles a reapprovisionner" />
-        {selectedEtablissement ? (
-          articlesLoading ? (
-            <p className="px-4 py-3 text-sm text-slate-500">Chargement...</p>
-          ) : articlesError ? (
-            <p className="px-4 py-3 text-sm text-rose-600">{articlesError}</p>
-          ) : lowStockArticles.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-emerald-600">
-              Aucun article n&apos;est sous son seuil d&apos;alerte.
-            </p>
-          ) : (
-            <div className="mt-3 grid gap-3 px-4 pb-4 md:grid-cols-2">
-              {lowStockArticles.map((article) => (
-                <div key={article.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-                  <p className="text-sm font-semibold text-slate-900">{article.nom}</p>
-                  <p className="text-xs text-slate-600">
-                    Stock: <span className="font-semibold text-slate-900">{article.quantite}</span> / seuil{" "}
-                    <span className="font-semibold text-slate-900">{article.seuilAlerte}</span>
-                  </p>
-                  <p className="text-[11px] text-slate-500">Reference: {article.referenceFournisseur ?? "N/A"}</p>
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <p className="px-4 py-3 text-sm text-slate-500">Selectionnez un etablissement pour voir les alertes.</p>
-        )}
-      </Card>
 
       <Card>
         <CardHeader title="Inventaire de l'etablissement" subtitle="Export et diffusion de l'inventaire" />
