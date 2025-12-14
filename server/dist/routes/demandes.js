@@ -111,12 +111,15 @@ exports.demandesRouter.get("/", (0, role_1.allowRoles)("superadmin", "agent", "r
         if (req.user.role === "agent") {
             where.agentId = req.user.id;
         }
+        if (req.user.role === "responsable" && req.user.domaine) {
+            where.agent = { domaine: { in: [req.user.domaine] } };
+        }
     }
     const demandes = await prisma_1.prisma.demande.findMany({
         where,
         include: {
             items: true,
-            agent: { select: { id: true, nom: true, contactEmail: true } },
+            agent: { select: { id: true, nom: true, contactEmail: true, domaine: true } },
             validatedBy: { select: { id: true, nom: true } },
             etablissement: { select: { id: true, nom: true } },
         },
@@ -128,23 +131,29 @@ exports.demandesRouter.get("/:id", (0, role_1.allowRoles)("superadmin", "agent",
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
         include: {
             items: true,
-            agent: { select: { id: true, nom: true, contactEmail: true } },
+            agent: { select: { id: true, nom: true, contactEmail: true, domaine: true } },
             validatedBy: { select: { id: true, nom: true } },
             etablissement: { select: { id: true, nom: true } },
         },
     });
     if (!demande)
         return res.status(404).json({ message: "Demande introuvable" });
+    if (req.user?.role === "responsable" && req.user.domaine && demande.agent?.domaine && demande.agent.domaine !== req.user.domaine) {
+        return res.status(403).json({ message: "Acces refuse pour ce domaine" });
+    }
     res.json(demande);
 });
 exports.demandesRouter.get("/toutes", (0, role_1.allowRoles)("responsable", "admin"), async (req, res) => {
     if (!req.tenantId)
         return res.status(400).json({ message: "Tenant requis" });
     const demandes = await prisma_1.prisma.demande.findMany({
-        where: { etablissementId: req.tenantId },
+        where: {
+            etablissementId: req.tenantId,
+            ...(req.user?.role === "responsable" && req.user.domaine ? { agent: { domaine: { in: [req.user.domaine] } } } : {}),
+        },
         include: {
             items: true,
-            agent: { select: { id: true, nom: true, contactEmail: true } },
+            agent: { select: { id: true, nom: true, contactEmail: true, domaine: true } },
             validatedBy: { select: { id: true, nom: true } },
             etablissement: { select: { id: true, nom: true } },
         },
@@ -154,10 +163,13 @@ exports.demandesRouter.get("/toutes", (0, role_1.allowRoles)("responsable", "adm
 exports.demandesRouter.patch("/:id", (0, role_1.allowRoles)("responsable", "admin"), async (req, res) => {
     const demande = await prisma_1.prisma.demande.findFirst({
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
-        include: { items: true },
+        include: { items: true, agent: { select: { id: true, domaine: true } } },
     });
     if (!demande)
         return res.status(404).json({ message: "Demande introuvable" });
+    if (req.user?.role === "responsable" && req.user.domaine && demande.agent?.domaine && demande.agent.domaine !== req.user.domaine) {
+        return res.status(403).json({ message: "Acces refuse pour ce domaine" });
+    }
     const { statut, items } = req.body;
     if (items) {
         await Promise.all(items.map((item) => prisma_1.prisma.demandeItem.update({
@@ -211,10 +223,13 @@ exports.demandesRouter.patch("/:id/cancel", (0, role_1.allowRoles)("agent"), asy
 exports.demandesRouter.patch("/:id/refuse", (0, role_1.allowRoles)("responsable", "admin"), async (req, res) => {
     const demande = await prisma_1.prisma.demande.findFirst({
         where: { id: req.params.id, ...(req.tenantId ? { etablissementId: req.tenantId } : {}) },
-        include: { items: true },
+        include: { items: true, agent: { select: { id: true, domaine: true } } },
     });
     if (!demande)
         return res.status(404).json({ message: "Demande introuvable" });
+    if (req.user?.role === "responsable" && req.user.domaine && demande.agent?.domaine && demande.agent.domaine !== req.user.domaine) {
+        return res.status(403).json({ message: "Acces refuse pour ce domaine" });
+    }
     const updated = await prisma_1.prisma.demande.update({
         where: { id: demande.id },
         data: { statut: "refusee" },

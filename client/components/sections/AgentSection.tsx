@@ -191,10 +191,7 @@ export function AgentSection() {
       selectedEtablissementId || selectedResponsableId
         ? { etablissementId: selectedEtablissementId || undefined, ownerId: selectedResponsableId || undefined }
         : undefined;
-    Promise.all([
-      api.getArticles(articleParams),
-      api.getCategories(categoryParams),
-    ])
+    Promise.all([api.getArticles(articleParams), api.getCategories(categoryParams)])
       .then(([articlesData, categoriesData]) => {
         setArticles(
           articlesData.map((article) => ({
@@ -250,21 +247,12 @@ export function AgentSection() {
     [articles, categoryFilter],
   );
 
-  const responsableOptions = useMemo(() => {
-    const options: Array<{ value: string; label: string }> = [];
-    const buildOptionValue = (etabId: string, respId?: string | null) => `${etabId}::${respId ?? "none"}`;
-    establishments.forEach((etab) => {
-      if (etab.responsables?.length) {
-        etab.responsables.forEach((resp) => {
-          const label = resp.domaine?.trim() || "Domaine non renseigné";
-          options.push({ value: buildOptionValue(etab.id, resp.id), label });
-        });
-      } else {
-        options.push({ value: buildOptionValue(etab.id), label: etab.nom });
-      }
-    });
-    return options;
-  }, [establishments]);
+  const selectedResponsableName = useMemo(() => {
+    if (!selectedResponsableId) return "Non assigné";
+    const etab = establishments.find((e) => e.id === selectedEtablissementId);
+    const resp = etab?.responsables?.find((r) => r.id === selectedResponsableId);
+    return resp?.nom ?? "Non assigné";
+  }, [establishments, selectedEtablissementId, selectedResponsableId]);
 
   const articleIndex = useMemo(() => {
     const map = new Map<string, Article>();
@@ -322,17 +310,6 @@ export function AgentSection() {
       }
       return next;
     });
-  };
-
-  const handleSelectStore = (value: string) => {
-    // value format: "{etabId}::{responsableId|none}"
-    const [etabId, respId] = value.split("::");
-    setSelectedEtablissementId(etabId);
-    setSelectedResponsableId(respId && respId !== "none" ? respId : null);
-    setCategoryFilter("");
-    setCart({});
-    setSubmitError(null);
-    setSubmitSuccess(null);
   };
 
   const updateQuantity = (articleId: string, quantity: number, maxAllowed: number) => {
@@ -411,42 +388,36 @@ export function AgentSection() {
       />
 
       <Card className="border-slate-200">
-        <CardHeader title="Magasin et filtres" subtitle="SÃ©lectionnez l'Ã©tablissement et filtrez par catÃ©gorie" />
+        <CardHeader title="Magasin et filtres" subtitle="Sélectionnez l'établissement et filtrez par catégorie" />
         <div className="space-y-3 px-4 pb-4">
           <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm font-medium text-slate-700">
-              Responsable / domaine
-              <select
-                className="mt-1 w-64 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
-                value={`${selectedEtablissementId}::${selectedResponsableId ?? "none"}`}
-                onChange={(event) => handleSelectStore(event.target.value)}
-                disabled={establishmentsLoading}
-              >
-                <option value="">Choisir...</option>
-                {responsableOptions.map((option, index) => (
-                  <option key={`${option.value}-${index}`} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="space-y-1 text-sm font-medium text-slate-700">
+              <div>
+                Responsable
+                <p className="mt-1 inline-flex min-w-[8rem] rounded-full border border-slate-200 px-3 py-1 text-sm font-semibold text-slate-800">
+                  {selectedResponsableName}
+                </p>
+              </div>
+              <label className="block">
+                Catégorie
+                <select
+                  className="mt-1 w-56 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
+                  value={categoryFilter}
+                  onChange={(event) => setCategoryFilter(event.target.value)}
+                  disabled={categoriesLoading || (establishments.length > 0 && !selectedEtablissementId)}
+                >
+                  <option value="">Toutes</option>
+                  <option value="none">Sans catégorie</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.nom}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             <label className="text-sm font-medium text-slate-700">
-              CatÃ©gorie
-              <select
-                className="mt-1 w-56 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none disabled:bg-slate-50"
-                value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value)}
-                disabled={categoriesLoading || (establishments.length > 0 && !selectedEtablissementId)}
-              >
-                <option value="">Toutes</option>
-                <option value="none">Sans catÃ©gorie</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.nom}
-                  </option>
-                ))}
-              </select>
             </label>
 
             <div className="text-xs text-slate-500">

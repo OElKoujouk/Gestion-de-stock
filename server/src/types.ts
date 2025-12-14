@@ -8,6 +8,7 @@ export type RequestUser = {
   role: Role;
   etablissementId: string | null;
   permissions: UserPermissions;
+  domaine?: string | null;
 };
 
 declare global {

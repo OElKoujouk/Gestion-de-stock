@@ -21,7 +21,7 @@ async function authMiddleware(req, res, next) {
         const payload = jsonwebtoken_1.default.verify(token, JWT_SECRET);
         const dbUser = await prisma_1.prisma.user.findUnique({
             where: { id: payload.sub },
-            select: { id: true, role: true, etablissementId: true, permissions: true },
+            select: { id: true, role: true, etablissementId: true, permissions: true, domaine: true },
         });
         if (!dbUser) {
             return res.status(401).json({ message: "Utilisateur introuvable" });
@@ -31,6 +31,7 @@ async function authMiddleware(req, res, next) {
             role: dbUser.role,
             etablissementId: dbUser.etablissementId,
             permissions: (0, permissions_1.normalizePermissions)(dbUser.permissions, dbUser.role),
+            domaine: dbUser.domaine,
         };
         req.user = user;
         next();
