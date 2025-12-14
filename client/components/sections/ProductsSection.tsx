@@ -420,7 +420,7 @@ export function ProductsSection() {
                   onClick={handleDownloadInventory}
                   disabled={articles.length === 0}
                 >
-                  Télécharger l'inventaire (PDF)
+                  Télécharger l&apos;inventaire (PDF)
                 </button>
               </div>
             ) : undefined
