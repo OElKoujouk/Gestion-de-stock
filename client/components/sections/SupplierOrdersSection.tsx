@@ -7,7 +7,6 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
 import { useAuth } from "@/context/auth-context";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 type Article = {
   id: string;
@@ -44,10 +43,9 @@ export function SupplierOrdersSection() {
   /*  State base  */
 
   const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; nom: string }>>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
 
   const [supplierName, setSupplierName] = useState("");
   const [supplierAddressLine, setSupplierAddressLine] = useState("");
@@ -60,6 +58,11 @@ export function SupplierOrdersSection() {
 
   const [search, setSearch] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductReference, setNewProductReference] = useState("");
+  const [newProductCategoryId, setNewProductCategoryId] = useState("");
+  const [catalogMessage, setCatalogMessage] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -76,20 +79,34 @@ export function SupplierOrdersSection() {
   /*  Fetch données  */
 
   useEffect(() => {
-    setLoading(true);
-    api
-      .getArticles()
-      .then((data) => {
-        setArticles(data);
-        setError(null);
+    if (!canManageSupplierOrders || isSuperAdmin || !selectedSupplierId) {
+      setArticles([]);
+      setCategories([]);
+      setCatalogError(null);
+      setQuantities({});
+      setCatalogMessage(null);
+      return;
+    }
+
+    setCatalogLoading(true);
+    Promise.all([
+      api.getArticles({ ownerId: selectedSupplierId }),
+      api.getCategories({ ownerId: selectedSupplierId }),
+    ])
+      .then(([articlesData, categoriesData]) => {
+        setArticles(articlesData);
+        setCategories(categoriesData);
+        setCatalogError(null);
       })
       .catch((err) =>
-        setError(
-          err instanceof Error ? err.message : "Impossible de charger les articles",
+        setCatalogError(
+          err instanceof Error
+            ? err.message
+            : "Impossible de charger le catalogue du fournisseur",
         ),
       )
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setCatalogLoading(false));
+  }, [canManageSupplierOrders, isSuperAdmin, selectedSupplierId]);
 
   useEffect(() => {
     if (!canManageSupplierOrders || isSuperAdmin) {
@@ -133,21 +150,6 @@ export function SupplierOrdersSection() {
         ),
       )
       .finally(() => setSuppliersLoading(false));
-  }, [canManageSupplierOrders, isSuperAdmin]);
-
-  useEffect(() => {
-    if (!canManageSupplierOrders || isSuperAdmin) {
-      setCategories([]);
-      return;
-    }
-    setCategoriesLoading(true);
-    api
-      .getCategories()
-      .then((data) => {
-        setCategories(data);
-      })
-      .catch(() => setCategories([]))
-      .finally(() => setCategoriesLoading(false));
   }, [canManageSupplierOrders, isSuperAdmin]);
 
   /*  Dérivés / mémo  */
@@ -231,9 +233,104 @@ export function SupplierOrdersSection() {
     return { address: line ?? "", zip: zip ?? "", city: cityParts.join(" ").trim() };
   };
 
+  const handleCreateSupplierCategory = () => {
+    if (!selectedSupplierId || !newCategoryName.trim()) return;
+    setCatalogMessage(null);
+    api
+      .createCategory({ nom: newCategoryName.trim(), ownerId: selectedSupplierId })
+      .then((created) => {
+        setCategories((prev) => [created, ...prev]);
+        setNewCategoryName("");
+        setCatalogMessage("Catégorie ajoutée au catalogue du fournisseur.");
+      })
+      .catch((err) =>
+        setCatalogMessage(
+          err instanceof Error
+            ? err.message
+            : "Impossible d'ajouter la catégorie pour ce fournisseur",
+        ),
+      );
+  };
+
+  const handleCreateSupplierArticle = () => {
+    if (!selectedSupplierId || !newProductName.trim()) return;
+    setCatalogMessage(null);
+    api
+      .createArticle({
+        nom: newProductName.trim(),
+        referenceFournisseur: newProductReference.trim(),
+        categorieId: newProductCategoryId || null,
+        quantite: 0,
+        seuilAlerte: 0,
+        ownerId: selectedSupplierId,
+      })
+      .then((created) => {
+        setArticles((prev) => [created, ...prev]);
+        setNewProductName("");
+        setNewProductReference("");
+        setNewProductCategoryId("");
+        setCatalogMessage("Produit ajouté au stock du fournisseur.");
+      })
+      .catch((err) =>
+        setCatalogMessage(
+          err instanceof Error
+            ? err.message
+            : "Impossible d'ajouter le produit pour ce fournisseur",
+        ),
+      );
+  };
+
+  const handleDeleteSupplierArticle = async (articleId: string, articleName: string) => {
+    if (!selectedSupplierId) return;
+    if (!window.confirm(`Supprimer la référence « ${articleName} » de ce fournisseur ?`)) return;
+    setCatalogMessage(null);
+    try {
+      await api.deleteArticle(articleId);
+      setArticles((prev) => prev.filter((a) => a.id !== articleId));
+      setQuantities((prev) => {
+        const next = { ...prev };
+        delete next[articleId];
+        return next;
+      });
+      setCatalogMessage("Référence supprimée du catalogue du fournisseur.");
+    } catch (err) {
+      setCatalogMessage(
+        err instanceof Error
+          ? err.message
+          : "Impossible de supprimer cette référence fournisseur",
+      );
+    }
+  };
+
+  const handleDeleteSupplierCategory = async (categoryId: string, categoryName: string) => {
+    if (!selectedSupplierId || categoryId === "none") return;
+    if (!window.confirm(`Supprimer la catégorie « ${categoryName} » et replacer ses références en “Sans catégorie” ?`))
+      return;
+    setCatalogMessage(null);
+    try {
+      await api.deleteCategory(categoryId);
+      setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+      setArticles((prev) =>
+        prev.map((a) => (a.categorieId === categoryId ? { ...a, categorieId: null } : a)),
+      );
+      if (selectedCategoryId === categoryId) setSelectedCategoryId("");
+      setCatalogMessage("Catégorie supprimée. Références déplacées en “Sans catégorie”.");
+    } catch (err) {
+      setCatalogMessage(
+        err instanceof Error
+          ? err.message
+          : "Impossible de supprimer cette catégorie fournisseur",
+      );
+    }
+  };
+
   const validateForm = () => {
     if (!supplierName.trim()) {
       setSubmitMessage("Le nom du fournisseur est requis.");
+      return false;
+    }
+    if (!selectedSupplierId) {
+      setSubmitMessage("Choisissez un fournisseur pour passer commande.");
       return false;
     }
     if (selectedItems.length === 0) {
@@ -255,15 +352,21 @@ export function SupplierOrdersSection() {
       supplierZip,
       supplierCity,
     );
+    const normalizedName = supplierName.trim().toLowerCase();
+    const normalizedAddress = addressText.trim().toLowerCase();
 
     const existing = suppliers.find(
       (s) =>
-        s.nom === supplierName.trim() &&
-        (s.adresse ?? "").trim() === addressText.trim(),
+        s.nom.trim().toLowerCase() === normalizedName ||
+        (normalizedAddress && (s.adresse ?? "").trim().toLowerCase() === normalizedAddress),
     );
     if (existing) {
       setSelectedSupplierId(existing.id);
       setSubmitMessage("Fournisseur déjà enregistré, sélection mise à jour.");
+      const parsed = parseAddressText(existing.adresse);
+      setSupplierAddressLine(parsed.address);
+      setSupplierZip(parsed.zip);
+      setSupplierCity(parsed.city);
       return;
     }
 
@@ -306,14 +409,29 @@ export function SupplierOrdersSection() {
     }
   };
 
-  const handleDeleteSupplier = (supplierId: string) => {
-    setSuppliers((prev) => prev.filter((s) => s.id !== supplierId));
-    if (selectedSupplierId === supplierId) {
-      setSelectedSupplierId("");
-      setSupplierName("");
-      setSupplierAddressLine("");
-      setSupplierZip("");
-      setSupplierCity("");
+  const handleDeleteSupplier = async (supplierId: string) => {
+    if (!supplierId) return;
+    if (!window.confirm("Supprimer définitivement ce fournisseur ?")) return;
+    setSubmitMessage(null);
+    try {
+      await api.deleteSupplier(supplierId);
+      setSuppliers((prev) => prev.filter((s) => s.id !== supplierId));
+      if (selectedSupplierId === supplierId) {
+        setSelectedSupplierId("");
+        setSupplierName("");
+        setSupplierAddressLine("");
+        setSupplierZip("");
+        setSupplierCity("");
+        setArticles([]);
+        setCategories([]);
+        setQuantities({});
+        setCatalogMessage(null);
+      }
+      setSubmitMessage("Fournisseur supprimé.");
+    } catch (err) {
+      setSubmitMessage(
+        err instanceof Error ? err.message : "Impossible de supprimer ce fournisseur",
+      );
     }
   };
 
@@ -324,6 +442,24 @@ export function SupplierOrdersSection() {
     }
     if (!supplierName.trim()) {
       setSubmitMessage("Nom du fournisseur requis.");
+      return;
+    }
+    const normalizedName = supplierName.trim().toLowerCase();
+    const normalizedAddress = buildAddressText(
+      supplierAddressLine,
+      supplierZip,
+      supplierCity,
+    )
+      .trim()
+      .toLowerCase();
+    const duplicate = suppliers.find(
+      (s) =>
+        s.id !== selectedSupplierId &&
+        (s.nom.trim().toLowerCase() === normalizedName ||
+          (normalizedAddress && (s.adresse ?? "").trim().toLowerCase() === normalizedAddress)),
+    );
+    if (duplicate) {
+      setSubmitMessage("Un fournisseur avec le même nom ou la même adresse existe déjà.");
       return;
     }
     const addressText = buildAddressText(
@@ -736,7 +872,7 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
       <SectionHeader
         eyebrow="Commandes fournisseurs"
         title="Préparer un bon de commande"
-        description="Sélectionnez les articles du stock, renseignez le fournisseur, générez un PDF et suivez vos commandes en cours."
+        description="Chaque fournisseur a son catalogue dédié : références, catégories et quantités à commander. Préparez vos bons sans afficher les stocks internes."
       />
 
       {/* Stats rapides */}
@@ -910,17 +1046,16 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
             </div>
           </Card>
 
-          {/* Articles du stock */}
           <Card>
             <CardHeader
-              title="Articles du stock"
-              subtitle="Choisissez les quantités à commander"
+              title="Catalogue du fournisseur"
+              subtitle="Stock dédié, catégories et références spécifiques"
               action={
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="search"
-                      placeholder="Rechercher un produit ou une référence"
+                      placeholder="Rechercher une référence"
                       className="w-64 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
@@ -929,7 +1064,6 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
                       className="w-56 rounded-full border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500/70 focus:outline-none"
                       value={selectedCategoryId}
                       onChange={(event) => setSelectedCategoryId(event.target.value)}
-                      disabled={categoriesLoading}
                     >
                       <option value="">Toutes les catégories</option>
                       <option value="none">Sans catégorie</option>
@@ -951,41 +1085,190 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
                     type="button"
                     className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50"
                     onClick={handleCreateOrder}
-                    disabled={!canSubmitOrders || submitting}
+                    disabled={!canSubmitOrders || submitting || !selectedSupplierId}
                   >
                     {submitting ? "Création..." : "Créer la commande fournisseur"}
                   </button>
                 </div>
               }
             />
-            {loading ? (
+            {!selectedSupplierId ? (
               <p className="px-4 pb-4 text-sm text-slate-500">
-                Chargement des articles...
+                Sélectionnez un fournisseur pour accéder à son catalogue dédié.
               </p>
-            ) : error ? (
-              <p className="px-4 pb-4 text-sm text-rose-600">{error}</p>
+            ) : catalogLoading ? (
+              <p className="px-4 pb-4 text-sm text-slate-500">
+                Chargement du catalogue fournisseur...
+              </p>
+            ) : catalogError ? (
+              <p className="px-4 pb-4 text-sm text-rose-600">{catalogError}</p>
             ) : filteredArticles.length === 0 ? (
-              <p className="px-4 pb-4 text-sm text-slate-500">
-                Aucun article trouvé.
-              </p>
+              <div className="space-y-3 px-4 pb-4">
+                <p className="text-sm text-slate-500">
+                  Aucun article pour ce fournisseur. Ajoutez une catégorie puis des références.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-900">Nouvelle catégorie</p>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(event) => setNewCategoryName(event.target.value)}
+                        className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        placeholder="Ex : Consommables"
+                        disabled={!canSubmitOrders}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        onClick={handleCreateSupplierCategory}
+                        disabled={!canSubmitOrders || !newCategoryName.trim()}
+                      >
+                        Ajouter
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-900">Nouvelle référence</p>
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={newProductName}
+                        onChange={(event) => setNewProductName(event.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        placeholder="Nom du produit"
+                        disabled={!canSubmitOrders}
+                      />
+                      <input
+                        type="text"
+                        value={newProductReference}
+                        onChange={(event) => setNewProductReference(event.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        placeholder="Référence fournisseur"
+                        disabled={!canSubmitOrders}
+                      />
+                      <select
+                        value={newProductCategoryId}
+                        onChange={(event) => setNewProductCategoryId(event.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        disabled={!canSubmitOrders}
+                      >
+                        <option value="">Sans catégorie</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.nom}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        onClick={handleCreateSupplierArticle}
+                        disabled={!canSubmitOrders || !newProductName.trim()}
+                      >
+                        Enregistrer la référence
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {catalogMessage ? <p className="text-sm text-slate-700">{catalogMessage}</p> : null}
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4 px-4 pb-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-900">Nouvelle catégorie</p>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(event) => setNewCategoryName(event.target.value)}
+                        className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        placeholder="Ex : Consommables"
+                        disabled={!canSubmitOrders}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        onClick={handleCreateSupplierCategory}
+                        disabled={!canSubmitOrders || !newCategoryName.trim()}
+                      >
+                        Ajouter
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-900">Nouvelle référence</p>
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={newProductName}
+                        onChange={(event) => setNewProductName(event.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        placeholder="Nom du produit"
+                        disabled={!canSubmitOrders}
+                      />
+                      <input
+                        type="text"
+                        value={newProductReference}
+                        onChange={(event) => setNewProductReference(event.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        placeholder="Référence fournisseur"
+                        disabled={!canSubmitOrders}
+                      />
+                      <select
+                        value={newProductCategoryId}
+                        onChange={(event) => setNewProductCategoryId(event.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-emerald-500/70 focus:outline-none"
+                        disabled={!canSubmitOrders}
+                      >
+                        <option value="">Sans catégorie</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.nom}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        onClick={handleCreateSupplierArticle}
+                        disabled={!canSubmitOrders || !newProductName.trim()}
+                      >
+                        Enregistrer la référence
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {catalogMessage ? <p className="text-sm text-slate-700">{catalogMessage}</p> : null}
+
                 {articlesByCategory.map((group) => (
                   <div key={group.id} className="rounded-2xl border border-slate-200 bg-white/60">
                     <div className="flex items-center justify-between px-4 py-3">
                       <p className="text-sm font-semibold text-slate-900">{group.label}</p>
-                      <span className="text-xs text-slate-500">{group.items.length} article(s)</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">{group.items.length} référence(s)</span>
+                        {group.id !== "none" ? (
+                          <button
+                            type="button"
+                            className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                            onClick={() => handleDeleteSupplierCategory(group.id, group.label)}
+                          >
+                            Supprimer
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="divide-y divide-slate-100 text-sm">
                       <div className="grid items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid-cols-[1.5fr_minmax(0,1fr)] sm:text-xs">
                         <div className="sm:flex sm:items-center sm:gap-2">
                           <span>Produit</span>
                         </div>
-                        <div className="grid grid-cols-3 items-center gap-2 sm:grid-cols-4">
+                        <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-3">
                           <span className="text-center">Référence</span>
-                          <span className="text-center">Stock</span>
                           <span className="text-center">Qté à commander</span>
-                          <span className="hidden text-right sm:block">Seuil</span>
+                          <span className="hidden text-right sm:block">Actions</span>
                         </div>
                       </div>
                       {group.items
@@ -993,32 +1276,22 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
                         .sort((a, b) => a.nom.localeCompare(b.nom))
                         .map((article) => {
                           const quantityValue = quantities[article.id] ?? 0;
-                          const inAlert = article.quantite <= article.seuilAlerte;
                           return (
                             <div
                               key={article.id}
-                              className={cn(
-                                "grid items-center gap-2 px-4 py-2 sm:grid-cols-[1.5fr_minmax(0,1fr)]",
-                                inAlert && "bg-amber-50/60",
-                              )}
+                              className="grid items-center gap-2 px-4 py-2 sm:grid-cols-[1.5fr_minmax(0,1fr)]"
                             >
                               <div className="space-y-1">
                                 <p className="font-semibold text-slate-900">
                                   {article.nom}
                                 </p>
-                                {inAlert ? (
-                                  <span className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
-                                    Niveau d&apos;alerte (stock : {article.quantite},
-                                    seuil : {article.seuilAlerte})
-                                  </span>
-                                ) : null}
+                                <span className="inline-flex w-fit items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                                  Référence dédiée au fournisseur
+                                </span>
                               </div>
-                              <div className="grid grid-cols-3 items-center gap-2 sm:grid-cols-4">
+                              <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-3">
                                 <span className="text-center text-slate-600">
                                   {article.referenceFournisseur ?? " - "}
-                                </span>
-                                <span className="text-center font-semibold text-slate-900">
-                                  {article.quantite}
                                 </span>
                                 <input
                                   type="number"
@@ -1035,9 +1308,13 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
                                     }))
                                   }
                                 />
-                                <span className="hidden text-right text-slate-600 sm:block">
-                                  {article.seuilAlerte}
-                                </span>
+                                <button
+                                  type="button"
+                                  className="hidden rounded-full bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 sm:block"
+                                  onClick={() => handleDeleteSupplierArticle(article.id, article.nom)}
+                                >
+                                  Supprimer
+                                </button>
                               </div>
                             </div>
                           );
@@ -1158,48 +1435,51 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
 
                         {editingOrderId === order.id ? (
                           <div className="space-y-1 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                            {order.items.map((item) => (
-                              <div
-                                key={item.id}
-                                className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-xs"
-                              >
-                                <span className="text-slate-700">
-                                  {articles.find(
-                                    (a) => a.id === item.articleId,
-                                  )?.nom ?? "Article"}
-                                </span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  className="w-16 rounded-full border border-slate-200 px-2 py-1 text-center focus:border-emerald-500/70 focus:outline-none"
-                                  value={
-                                    editingItems[item.articleId] ??
-                                    item.quantite
-                                  }
-                                  onChange={(event) =>
-                                    setEditingItems((prev) => ({
-                                      ...prev,
-                                      [item.articleId]: Number(
-                                        event.target.value,
-                                      ),
-                                    }))
-                                  }
-                                />
-                                <button
-                                  type="button"
-                                  className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
-                                  onClick={() =>
-                                    setEditingItems((prev) => {
-                                      const next = { ...prev };
-                                      delete next[item.articleId];
-                                      return next;
-                                    })
-                                  }
+                            {order.items.map((item) => {
+                              const linked = articles.find((a) => a.id === item.articleId);
+                              const label = linked?.nom ?? "Article";
+                              const ref = linked?.referenceFournisseur ?? "—";
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-xs"
                                 >
-                                  Retirer
-                                </button>
-                              </div>
-                            ))}
+                                  <span className="text-slate-700">
+                                    {label} (réf. {ref})
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    className="w-16 rounded-full border border-slate-200 px-2 py-1 text-center focus:border-emerald-500/70 focus:outline-none"
+                                    value={
+                                      editingItems[item.articleId] ??
+                                      item.quantite
+                                    }
+                                    onChange={(event) =>
+                                      setEditingItems((prev) => ({
+                                        ...prev,
+                                        [item.articleId]: Number(
+                                          event.target.value,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                                    onClick={() =>
+                                      setEditingItems((prev) => {
+                                        const next = { ...prev };
+                                        delete next[item.articleId];
+                                        return next;
+                                      })
+                                    }
+                                  >
+                                    Retirer
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : null}
 
@@ -1215,13 +1495,14 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
                         {expandedOrders.includes(order.id) ? (
                           <ul className="list-disc space-y-1 pl-4 text-xs text-slate-700">
                             {order.items.map((item) => {
-                              const label =
-                                articles.find(
-                                  (a) => a.id === item.articleId,
-                                )?.nom ?? "Article";
+                              const linkedArticle = articles.find(
+                                (a) => a.id === item.articleId,
+                              );
+                              const label = linkedArticle?.nom ?? "Article";
+                              const ref = linkedArticle?.referenceFournisseur ?? "—";
                               return (
                                 <li key={item.id}>
-                                  {label}  -  {item.quantite}
+                                  {label} • Réf. {ref} • Qté {item.quantite}
                                 </li>
                               );
                             })}
@@ -1298,13 +1579,14 @@ const handleGenerateOrderPdf = (order: SupplierOrder) => {
                         {expandedOrders.includes(order.id) ? (
                           <ul className="list-disc space-y-1 pl-4 text-xs text-slate-700">
                             {order.items.map((item) => {
-                              const label =
-                                articles.find(
-                                  (a) => a.id === item.articleId,
-                                )?.nom ?? "Article";
+                              const linkedArticle = articles.find(
+                                (a) => a.id === item.articleId,
+                              );
+                              const label = linkedArticle?.nom ?? "Article";
+                              const ref = linkedArticle?.referenceFournisseur ?? "—";
                               return (
                                 <li key={item.id}>
-                                  {label}  -  {item.quantite}
+                                  {label} • Réf. {ref} • Qté {item.quantite}
                                 </li>
                               );
                             })}

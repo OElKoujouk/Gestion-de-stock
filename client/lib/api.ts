@@ -94,6 +94,7 @@ export const api = {
     seuilAlerte: number;
     description?: string | null;
     etablissementId?: string;
+    ownerId?: string;
   }) =>
     request<{ id: string; nom: string; quantite: number; referenceFournisseur: string; seuilAlerte: number }>("/articles", {
       method: "POST",
@@ -142,7 +143,7 @@ export const api = {
     const query = searchParams.toString();
     return request<Array<{ id: string; nom: string }>>(`/categories${query ? `?${query}` : ""}`);
   },
-  createCategory: (payload: { nom: string; etablissementId?: string }) =>
+  createCategory: (payload: { nom: string; etablissementId?: string; ownerId?: string }) =>
     request<{ id: string; nom: string }>("/categories", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -357,15 +358,19 @@ export const api = {
         `/fournisseurs${query ? `?${query}` : ""}`,
       );
     },
-    createSupplier: (payload: { nom: string; adresse?: string | null }) =>
-      request<{ id: string; nom: string; adresse: string | null }>("/fournisseurs", {
-        method: "POST",
+  createSupplier: (payload: { nom: string; adresse?: string | null }) =>
+    request<{ id: string; nom: string; adresse: string | null }>("/fournisseurs", {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
   updateSupplier: (id: string, payload: { nom: string; adresse?: string | null }) =>
     request<{ id: string; nom: string; adresse: string | null }>(`/fournisseurs/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
+    }),
+  deleteSupplier: (id: string) =>
+    request<void>(`/fournisseurs/${id}`, {
+      method: "DELETE",
     }),
   deleteUser: (id: string) =>
     request<void>(`/users/${id}`, {
